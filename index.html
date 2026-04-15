@@ -1686,40 +1686,7 @@ async function sbDelete(tabla, id) {
   }
 }
 
-async function guardarVenta(carrito, pago) {
-  let total = carrito.reduce((acc, i) => acc + i.precio * i.cantidad, 0);
-  let vuelto = pago - total;
-
-  // 1. crear venta
-  const venta = await sbPost('ventas', {
-    total: total,
-    pago: pago,
-    vuelto: vuelto
-  });
-
-  const ventaId = venta[0].id;
-
-  // 2. crear items
-  for (let item of carrito) {
-    await sbPost('items', {
-      venta_id: ventaId,
-      producto_id: item.id,
-      nombre: item.nombre,
-      cantidad: item.cantidad,
-      precio: item.precio,
-      subtotal: item.precio * item.cantidad
-    });
-
-    // 3. actualizar stock
-    await sbUpdate('productos', item.id, {
-      stock: item.stock - item.cantidad
-    });
-  }
-
-  console.log('VENTA GUARDADA');
-}
-
-
+// ── FUNCIÓN OBSOLETA REMOVIDA — Ver guardarVenta(venta) abajo ──
 
 function sbUpsert(table, data) {
   return fetch(SUPABASE_URL + '/rest/v1/' + table, {
@@ -1758,14 +1725,46 @@ function guardarVenta(venta) {
     pago: parseFloat(venta.pago) || 0,
     vuelto: parseFloat(venta.vuelto) || 0
   };
+  
   sbPost('ventas', ventaRow)
     .then(function(res) {
-      console.log('✓ Venta guardada:', res);
+      var ventaId = res[0].id;
+      console.log('✓ Venta guardada con ID:', ventaId);
+      
+      // 2. Guardar items y actualizar stock
+      var promesas = venta.items.map(function(item) {
+        var prod = productos.find(function(p) { return p.nombre === item.name; });
+        return sbPost('items', {
+          venta_id: ventaId,
+          producto_id: prod ? prod.id : null,
+          cantidad: parseInt(item.qty),
+          precio: parseFloat(item.price),
+          subtotal: parseFloat(item.price) * parseInt(item.qty)
+        });
+      });
+      
+      return Promise.all(promesas);
+    })
+    .then(function() {
+      console.log('✓ Items guardados');
+      
+      // 3. Actualizar stock en BD
+      var promesas = venta.items.map(function(item) {
+        var prod = productos.find(function(p) { return p.nombre === item.name; });
+        if (!prod) return Promise.resolve();
+        return sbUpdate('productos', prod.id, { stock: prod.stock });
+      });
+      
+      return Promise.all(promesas);
+    })
+    .then(function() {
+      console.log('✓ Stock actualizado');
       setSync('ok','Guardado ✓');
     })
     .catch(function(err) {
       console.error('✗ Error al guardar venta:', err);
       setSync('error','Error al guardar venta');
+      toast('Error al guardar venta. Revise la consola.','mal');
     });
 }
 
@@ -1940,9 +1939,9 @@ function init() {
   historial = JSON.parse(localStorage.getItem('rpos_cache_hist') || '[]');
   renderInv();
   setTimeout(function(){ document.getElementById('scanner-input').focus(); }, 100);
-  setTimeout(cargarDeSupabase, 500);
-  setTimeout(cargarCategorias, 600);
-  setTimeout(cargarMarcas, 700);
+  cargarDeSupabase(); // Al iniciar, cargar INMEDIATAMENTE
+  setTimeout(cargarCategorias, 100);
+  setTimeout(cargarMarcas, 200);
 }
 function norm(p) {
   return {
@@ -1996,10 +1995,23 @@ function escanear() {
   var code=inp.value.trim();
   if(!code) return;
   inp.value='';
+  
+  // Intentar cargar del localStorage si está vacío
   if(!productos || productos.length === 0) {
-    toast('Cargando productos...','aviso');
+    var cached = localStorage.getItem('rpos_cache_prod');
+    if(cached) {
+      try { productos = JSON.parse(cached); } 
+      catch(e) { console.error('Error al cargar cache:', e); }
+    }
+  }
+  
+  if(!productos || productos.length === 0) {
+    toast('Sin productos cargados. Esperando sincronización...','aviso');
+    console.warn('⚠️ productos vacío', { productos, cacheExists: !!localStorage.getItem('rpos_cache_prod') });
+    inp.focus();
     return;
   }
+  
   var prod=productos.find(function(p){return String(p.codigo)===code||String(p.id)===code;});
   if(!prod){toast('Código no encontrado: '+code,'mal'); inp.focus(); return;}
   agregarAlCarro(prod); inp.focus();
@@ -2641,10 +2653,26 @@ document.addEventListener('DOMContentLoaded', function(){
 
 function presEscanear() {
   var inp=document.getElementById('pres-scanner');
-  if(!inp) return;
+  if(!inp) { console.error('❌ pres-scanner no existe'); return; }
   var code=inp.value.trim();
   if(!code) return; 
   inp.value='';
+  
+  // Intentar cargar del localStorage si está vacío
+  if(!productos || productos.length === 0) {
+    var cached = localStorage.getItem('rpos_cache_prod');
+    if(cached) {
+      try { productos = JSON.parse(cached); } 
+      catch(e) { console.error('Error al cargar cache:', e); }
+    }
+  }
+  
+  if(!productos || productos.length === 0) {
+    toast('Sin productos cargados. Esperando sincronización...','aviso');
+    inp.focus();
+    return;
+  }
+  
   var prod=productos.find(function(p){ return String(p.codigo)===code||String(p.id)===code; });
   if(!prod){ toast('No encontrado: '+code,'mal'); inp.focus(); return; }
   presAgregar(prod); inp.focus();
