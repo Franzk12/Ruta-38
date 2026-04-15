@@ -1695,19 +1695,16 @@ function programarSync() {
 function guardarVenta(venta) {
   setSync('syncing','Guardando venta…');
   var ventaRow = {
-    id: venta.id,
-    date: venta.date,
     total: venta.total,
     pago: venta.pago,
     vuelto: venta.vuelto
   };
   var itemsRows = (venta.items || []).map(function(it) {
     return {
-      sale_id: venta.id,
-      name: it.nombre || it.name,
-      qty: it.qty,
-      price: it.precio || it.price,
-      subtotal: it.subtotal
+      nombre: it.nombre || it.name,
+      cantidad: it.qty || it.cantidad,
+      precio: it.precio || it.price,
+      subtotal: (it.qty || it.cantidad) * (it.precio || it.price)
     };
   });
   sbPost('ventas', ventaRow)
