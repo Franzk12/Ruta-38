@@ -1579,8 +1579,12 @@ function sbGet(table, params) {
       'Authorization': 'Bearer ' + SUPABASE_KEY
     }
   }).then(function(r) {
-    if (!r.ok) throw new Error('Error ' + r.status);
-    return r.json();
+  const text = await r.text();
+
+if (!r.ok) {
+  console.error('ERROR SUPABASE:', text);
+  throw new Error(text);
+}
   });
 }
 
