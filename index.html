@@ -1579,12 +1579,27 @@ function sbGet(table, params) {
       'Authorization': 'Bearer ' + SUPABASE_KEY
     }
   }).then(function(r) {
+   async function sbPost(tabla, data) {
+  const r = await fetch(`TU_URL`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': 'TU_API_KEY',
+      'Authorization': 'Bearer TU_API_KEY'
+    },
+    body: JSON.stringify(data)
+  });
+
   const text = await r.text();
 
-if (!r.ok) {
-  console.error('ERROR SUPABASE:', text);
-  throw new Error(text);
+  if (!r.ok) {
+    console.error('ERROR SUPABASE:', text);
+    throw new Error(text);
+  }
+
+  return text ? JSON.parse(text) : null;
 }
+    return r.json();
   });
 }
 
