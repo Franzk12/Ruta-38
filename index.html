@@ -1609,10 +1609,6 @@ async function sbPost(tabla, data) {
 
   return text ? JSON.parse(text) : null;
 }
-
-// evita error del botón
-function ir() {}
-
 function sbUpsert(table, data) {
   return fetch(SUPABASE_URL + '/rest/v1/' + table, {
     method: 'POST',
