@@ -2025,70 +2025,58 @@ function abrirModal(id){
 }
 function cerrarModal(){document.getElementById('modal-overlay').classList.add('hidden');editandoId=null;}
 async function guardarProducto(){
-var codigo = document.getElementById('f-codigo').value.trim();
-codigo = codigo === "" ? null : Number(codigo);
+  var codigo = document.getElementById('f-codigo').value.trim();
+  codigo = codigo === "" ? null : Number(codigo);
   var nombre=document.getElementById('f-nombre').value.trim();
   var categoria=document.getElementById('f-cat').value;
   var marca=document.getElementById('f-marca').value;
   var precio = parseFloat(document.getElementById('f-precio').value);
-if (isNaN(precio)) precio = 0;
-
-var costo = parseFloat(document.getElementById('f-costo').value);
-if (isNaN(costo)) costo = 0;
-
-var stock = parseInt(document.getElementById('f-stock').value);
-if (isNaN(stock)) stock = 0;
-
-var stockDep = parseInt(document.getElementById('f-stockdep').value);
-if (isNaN(stockDep)) stockDep = 0;
-
-var minStock = parseInt(document.getElementById('f-minstock').value);
-if (isNaN(minStock)) minStock = 0;
+  if (isNaN(precio)) precio = 0;
+  
+  var costo = parseFloat(document.getElementById('f-costo').value);
+  if (isNaN(costo)) costo = 0;
+  
+  var stock = parseInt(document.getElementById('f-stock').value);
+  if (isNaN(stock)) stock = 0;
+  
+  var stockDep = parseInt(document.getElementById('f-stockdep').value);
+  if (isNaN(stockDep)) stockDep = 0;
+  
+  var minStock = parseInt(document.getElementById('f-minstock').value);
+  if (isNaN(minStock)) minStock = 0;
   
   if(!nombre){toast('Falta el nombre','mal');return;}
   if(!categoria){toast('Elegí una categoría','mal');return;}
   if(isNaN(precio)){toast('Ingresá el precio','mal');return;}
   if(isNaN(stock)){toast('Ingresá el stock del negocio','mal');return;}
-
-var producto = {
-  codigo: codigo === "" ? null : codigo,
-  nombre: nombre,
-  categoria: categoria || null,
-  marca: marca === "" ? null : marca,
-  precio: isNaN(precio) ? 0 : precio,
-  costo: isNaN(costo) ? 0 : costo,
-  stock: isNaN(stock) ? 0 : stock,
-  stockDeposito: isNaN(stockDep) ? 0 : stockDep,
-  minStock: isNaN(minStock) ? 0 : minStock
-};
-
-console.log('ENVIANDO:', producto);
-
-try {
-  const res = await sbPost('productos', producto);
-  console.log('RESPUESTA:', res);
-  toast('Guardado en Supabase ✓','ok');
-} catch(e) {
-  console.error('ERROR:', e);
-  toast('Error al guardar en Supabase','mal');
+  
+  var producto = {
+    codigo: codigo === "" ? null : codigo,
+    nombre: nombre,
+    categoria: categoria || null,
+    marca: marca === "" ? null : marca,
+    precio: isNaN(precio) ? 0 : precio,
+    costo: isNaN(costo) ? 0 : costo,
+    stock: isNaN(stock) ? 0 : stock,
+    stockDeposito: isNaN(stockDep) ? 0 : stockDep,
+    minStock: isNaN(minStock) ? 0 : minStock
+  };
+  
+  console.log('ENVIANDO:', producto);
+  
+  try {
+    const res = await sbPost('productos', producto);
+    console.log('RESPUESTA:', res);
+    toast('Guardado en Supabase ✓','ok');
+  } catch(e) {
+    console.error('ERROR:', e);
+    toast('Error al guardar en Supabase','mal');
+  }
+  
+  cerrarModal();
+  renderInv();
 }
 
-cerrarModal();
-renderInv();
-
-console.log('ENVIANDO:', producto);
-
-try {
-  const res = await sbPost('productos', producto);
-  console.log('RESPUESTA:', res);
-  toast('Guardado en Supabase ✓','ok');
-} catch(e) {
-  console.error('ERROR:', e);
-  toast('Error al guardar en Supabase','mal');
-}
-
-cerrarModal();
-renderInv();
 function eliminarProducto(id){var p=productos.find(function(x){return x.id===id;});if(!confirm('¿Eliminar "'+p.nombre+'"?'))return;productos=productos.filter(function(x){return x.id!==id;});renderInv();programarSync();toast('Eliminado','aviso');}
 
 // ── HISTORIAL ──
@@ -2734,6 +2722,16 @@ function marcasCargar(val) {
 function closeModal(modal) {
   if (!modal) return;
   modal.classList.add('hidden');
+}
+
+function anularVenta(id) {
+  var venta = historial.find(function(v){ return String(v.id) === String(id); });
+  if (!venta) { toast('Venta no encontrada','mal'); return; }
+  venta.anulada = true;
+  localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
+  programarSync();
+  toast('Venta anulada','ok');
+  renderHistorial();
 }
 
 document.addEventListener('click', function(e) {
