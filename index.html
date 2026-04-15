@@ -2221,6 +2221,7 @@ function abrirModal(id){
   editandoId=id||null;
   document.getElementById('modal-h').textContent=id?'✏ Editar producto':'+ Nuevo producto';
   if(id){var p=productos.find(function(x){return x.id===id;});
+    if(!p){toast('Producto no encontrado','mal');return;}
     document.getElementById('f-id-display').textContent=p.id;
     document.getElementById('f-codigo').value=p.codigo||''; document.getElementById('f-nombre').value=p.nombre;
     document.getElementById('f-cat').value=p.categoria||''; marcasCargar(p.marca||'');
