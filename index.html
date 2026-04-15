@@ -2025,6 +2025,20 @@ try {
 
 cerrarModal();
 renderInv();
+
+console.log('ENVIANDO:', producto);
+
+try {
+  const res = await sbPost('productos', producto);
+  console.log('RESPUESTA:', res);
+  toast('Guardado en Supabase ✓','ok');
+} catch(e) {
+  console.error('ERROR:', e);
+  toast('Error al guardar en Supabase','mal');
+}
+
+cerrarModal();
+renderInv();
 function eliminarProducto(id){var p=productos.find(function(x){return x.id===id;});if(!confirm('¿Eliminar "'+p.nombre+'"?'))return;productos=productos.filter(function(x){return x.id!==id;});renderInv();programarSync();toast('Eliminado','aviso');}
 
 // ── HISTORIAL ──
