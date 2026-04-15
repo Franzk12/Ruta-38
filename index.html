@@ -1575,6 +1575,32 @@ async function sbPost(tabla, data) {
 
   console.log('ENVIANDO:', data);
 
+async function sbPost(tabla, data) {
+  const url = SUPABASE_URL + '/rest/v1/' + tabla;
+
+  console.log('ENVIANDO:', data); // 👈 ACÁ
+
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify(data)
+  });
+
+  const text = await r.text();
+
+  if (!r.ok) {
+    console.error('ERROR SUPABASE:', text);
+    throw new Error(text);
+  }
+
+  return text ? JSON.parse(text) : null;
+}
+
   const r = await fetch(url, {
     method: 'POST',
     headers: {
