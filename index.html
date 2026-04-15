@@ -1668,6 +1668,24 @@ async function sbUpdate(tabla, id, data) {
   }
 }
 
+async function sbDelete(tabla, id) {
+  const url = `${SUPABASE_URL}/rest/v1/${tabla}?id=eq.${id}`;
+
+  const r = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY
+    }
+  });
+
+  if (!r.ok) {
+    const text = await r.text();
+    console.error('ERROR DELETE:', text);
+    throw new Error(text);
+  }
+}
+
 async function guardarVenta(carrito, pago) {
   let total = carrito.reduce((acc, i) => acc + i.precio * i.cantidad, 0);
   let vuelto = pago - total;
@@ -1947,13 +1965,14 @@ function ir(t) {
   document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active');});
   document.querySelectorAll('.main').forEach(function(m){m.classList.remove('active');});
   document.getElementById('tab-'+t).classList.add('active');
-  document.querySelectorAll('.tab')[['caja','inventario','historial','reportes','presupuesto'].indexOf(t)].classList.add('active');
+  var tabIndex = ['caja','inventario','historial','reportes','presupuesto','admin'].indexOf(t);
+  if(tabIndex >= 0) document.querySelectorAll('.tab')[tabIndex].classList.add('active');
   if(t==='inventario') renderInv();
   if(t==='historial') renderHistorial();
   if(t==='reportes') renderReportes();
-  if(t==='reportes') renderReportes();
   if(t==='caja') setTimeout(function(){document.getElementById('scanner-input').focus();},80);
   if(t==='presupuesto') setTimeout(function(){document.getElementById('pres-scanner').focus();},80);
+  if(t==='admin') { setTimeout(function(){ cargarCategorias(); cargarMarcas(); }, 100); }
 }
 
 // ── CAJA ──
@@ -2267,7 +2286,7 @@ async function guardarProducto(){
 function eliminarProducto(id){
   var p=productos.find(function(x){return x.id===id;});
   if(!confirm('¿Eliminar "'+p.nombre+'"?'))return;
-  sbUpdate('productos', id, {activa: false})
+  sbDelete('productos', id)
     .then(function(){
       productos=productos.filter(function(x){return x.id!==id;});
       localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
