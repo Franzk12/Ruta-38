@@ -319,6 +319,7 @@ button { cursor: pointer; pointer-events: auto !important; }
     <button class="tab" onclick="ir('historial')">🧾 Historial</button>
     <button class="tab" onclick="ir('reportes')">📊 Reportes</button>
     <button class="tab" onclick="ir('presupuesto')">📋 Presupuesto</button>
+    <button class="tab" onclick="ir('admin')">⚙️ Admin</button>
   </div>
   <div class="sync-pill"><div class="sync-dot" id="sync-dot"></div><span id="sync-lbl">Listo</span></div>
   <div class="clock" id="clock"></div>
@@ -757,6 +758,40 @@ button { cursor: pointer; pointer-events: auto !important; }
         <button class="btn-cobrar" id="pres-btn-generar" onclick="presGenerar()" disabled>📋 GENERAR PRESUPUESTO</button>
         <button class="btn-vaciar" onclick="presVaciar()">✕ Limpiar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ADMINISTRACIÓN -->
+  <div class="main" id="tab-admin">
+    <div class="inv-toolbar">
+      <h2 style="font-size:18px;margin:0;color:var(--text);">⚙️ Administración</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px;overflow-y:auto;height:calc(100% - 60px);">
+      
+      <!-- CATEGORÍAS -->
+      <div class="rep-card" style="grid-column:1">
+        <div class="rep-lbl" style="margin-bottom:14px;">📂 Categorías</div>
+        <div style="display:flex;gap:6px;margin-bottom:14px;">
+          <input class="inv-search" id="cat-nueva" type="text" placeholder="Nueva categoría…" style="flex:1;padding:8px;">
+          <button class="btn-cobrar" onclick="agregarCategoria()" style="padding:8px 16px;min-width:100px;">Agregar</button>
+        </div>
+        <div id="cat-lista" style="max-height:400px;overflow-y:auto;">
+          <div style="color:var(--muted);text-align:center;padding:20px;font-size:12px;">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- MARCAS -->
+      <div class="rep-card" style="grid-column:2">
+        <div class="rep-lbl" style="margin-bottom:14px;">🏷️ Marcas</div>
+        <div style="display:flex;gap:6px;margin-bottom:14px;">
+          <input class="inv-search" id="marca-nueva" type="text" placeholder="Nueva marca…" style="flex:1;padding:8px;">
+          <button class="btn-cobrar" onclick="agregarMarca()" style="padding:8px 16px;min-width:100px;">Agregar</button>
+        </div>
+        <div id="marca-lista" style="max-height:400px;overflow-y:auto;">
+          <div style="color:var(--muted);text-align:center;padding:20px;font-size:12px;">Cargando...</div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1565,6 +1600,10 @@ var editandoId = null;
 var ventaNum = parseInt(localStorage.getItem('rpos_vnum') || '1');
 var syncTimer = null;
 
+// ── CATEGORÍAS Y MARCAS ──
+var categorias = [];
+var marcas = [];
+
 // ── SUPABASE HELPERS ──
 function setSync(state, txt) {
   document.getElementById('sync-dot').className = 'sync-dot ' + state;
@@ -1736,13 +1775,156 @@ function cargarDeSupabase() {
     .catch(function(){});
 }
 
+// ── CATEGORÍAS Y MARCAS ──
+function cargarCategorias() {
+  sbGet('categorias', 'order=nombre.asc&activa=eq.true')
+    .then(function(data) {
+      if (data) {
+        categorias = data;
+        actualizarSelectCategorias();
+      }
+    })
+    .catch(function(){});
+}
+
+function cargarMarcas() {
+  sbGet('marcas', 'order=nombre.asc&activa=eq.true')
+    .then(function(data) {
+      if (data) {
+        marcas = data;
+        actualizarSelectMarcas();
+      }
+    })
+    .catch(function(){});
+}
+
+function actualizarSelectCategorias() {
+  var sel = document.getElementById('filter-cat');
+  var selForm = document.getElementById('f-cat');
+  if (sel) {
+    var selected = sel.value;
+    sel.innerHTML = '<option value="">Todas las categorías</option>' +
+      categorias.map(function(c){ return '<option value="'+c.nombre+'">'+c.nombre+'</option>'; }).join('');
+    sel.value = selected;
+  }
+  if (selForm) {
+    var selected = selForm.value;
+    selForm.innerHTML = 
+      categorias.map(function(c){ return '<option value="'+c.nombre+'">'+c.nombre+'</option>'; }).join('');
+    selForm.value = selected;
+  }
+  // Mostrar en admin
+  var lista = document.getElementById('cat-lista');
+  if (lista) {
+    lista.innerHTML = categorias.length > 0 ? 
+      categorias.map(function(c){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--border);font-size:13px;">'+
+          '<span>'+c.nombre+'</span>'+
+          '<button class="btn-d" data-id="'+c.id+'" onclick="eliminarCategoria('+c.id+')" style="padding:4px 8px;font-size:11px;">Eliminar</button>'+
+        '</div>';
+      }).join('')
+      : '<div style="color:var(--muted);text-align:center;padding:20px;font-size:12px;">Sin categorías</div>';
+  }
+}
+
+function actualizarSelectMarcas() {
+  var sel = document.getElementById('filter-marca');
+  var selForm = document.getElementById('f-marca');
+  if (sel) {
+    var selected = sel.value;
+    sel.innerHTML = '<option value="">Todas las marcas</option>' +
+      marcas.map(function(m){ return '<option value="'+m.nombre+'">'+m.nombre+'</option>'; }).join('');
+    sel.value = selected;
+  }
+  if (selForm) {
+    var selected = selForm.value;
+    selForm.innerHTML = 
+      marcas.map(function(m){ return '<option value="'+m.nombre+'">'+m.nombre+'</option>'; }).join('');
+    selForm.value = selected;
+  }
+  // Mostrar en admin
+  var lista = document.getElementById('marca-lista');
+  if (lista) {
+    lista.innerHTML = marcas.length > 0 ? 
+      marcas.map(function(m){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--border);font-size:13px;">'+
+          '<span>'+m.nombre+'</span>'+
+          '<button class="btn-d" data-id="'+m.id+'" onclick="eliminarMarca('+m.id+')" style="padding:4px 8px;font-size:11px;">Eliminar</button>'+
+        '</div>';
+      }).join('')
+      : '<div style="color:var(--muted);text-align:center;padding:20px;font-size:12px;">Sin marcas</div>';
+  }
+}
+
+function agregarCategoria() {
+  var input = document.getElementById('cat-nueva');
+  var nombre = input.value.trim();
+  if (!nombre) { toast('Ingresa un nombre de categoría','mal'); return; }
+  if (categorias.some(function(c){ return c.nombre === nombre; })) { 
+    toast('Esta categoría ya existe','aviso'); 
+    return; 
+  }
+  sbPost('categorias', { nombre: nombre })
+    .then(function() {
+      toast('Categoría agregada ✓','ok');
+      input.value = '';
+      cargarCategorias();
+    })
+    .catch(function(err){ 
+      console.error('Error:', err);
+      toast('Error al agregar categoría','mal'); 
+    });
+}
+
+function eliminarCategoria(id) {
+  if (!confirm('¿Eliminar esta categoría?')) return;
+  sbUpdate('categorias', id, { activa: false })
+    .then(function() {
+      toast('Categoría eliminada ✓','ok');
+      cargarCategorias();
+    })
+    .catch(function(){ toast('Error al eliminar','mal'); });
+}
+
+function agregarMarca() {
+  var input = document.getElementById('marca-nueva');
+  var nombre = input.value.trim();
+  if (!nombre) { toast('Ingresa un nombre de marca','mal'); return; }
+  if (marcas.some(function(m){ return m.nombre === nombre; })) { 
+    toast('Esta marca ya existe','aviso'); 
+    return; 
+  }
+  sbPost('marcas', { nombre: nombre })
+    .then(function() {
+      toast('Marca agregada ✓','ok');
+      input.value = '';
+      cargarMarcas();
+    })
+    .catch(function(err){ 
+      console.error('Error:', err);
+      toast('Error al agregar marca','mal'); 
+    });
+}
+
+function eliminarMarca(id) {
+  if (!confirm('¿Eliminar esta marca?')) return;
+  sbUpdate('marcas', id, { activa: false })
+    .then(function() {
+      toast('Marca eliminada ✓','ok');
+      cargarMarcas();
+    })
+    .catch(function(){ toast('Error al eliminar','mal'); });
+}
+
 // ── INICIO ──
 function init() {
   productos = JSON.parse(localStorage.getItem('rpos_cache_prod') || '[]');
   historial = JSON.parse(localStorage.getItem('rpos_cache_hist') || '[]');
   renderInv();
   setTimeout(function(){ document.getElementById('scanner-input').focus(); }, 100);
-  setTimeout(cargarDeSupabase, 800);
+  setTimeout(cargarDeSupabase, 500);
+  setTimeout(cargarCategorias, 600);
+  setTimeout(cargarMarcas, 700);
 }
 function norm(p) {
   return {
@@ -2056,22 +2238,47 @@ async function guardarProducto(){
     minStock: isNaN(minStock) ? 0 : minStock
   };
   
-  console.log('ENVIANDO:', producto);
-  
   try {
-    const res = await sbPost('productos', producto);
-    console.log('RESPUESTA:', res);
-    toast('Guardado en Supabase ✓','ok');
+    if(editandoId) {
+      // Editar producto existente
+      await sbUpdate('productos', editandoId, producto);
+      var idx = productos.findIndex(function(p){ return p.id === editandoId; });
+      if(idx >= 0) productos[idx] = Object.assign({}, productos[idx], producto);
+      toast('Producto actualizado ✓','ok');
+    } else {
+      // Crear nuevo producto
+      const res = await sbPost('productos', producto);
+      if(res && res[0]) {
+        producto.id = res[0].id;
+        productos.push(producto);
+      }
+      toast('Producto guardado ✓','ok');
+    }
   } catch(e) {
     console.error('ERROR:', e);
-    toast('Error al guardar en Supabase','mal');
+    toast('Error al guardar producto','mal');
   }
   
   cerrarModal();
+  localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
   renderInv();
 }
 
-function eliminarProducto(id){var p=productos.find(function(x){return x.id===id;});if(!confirm('¿Eliminar "'+p.nombre+'"?'))return;productos=productos.filter(function(x){return x.id!==id;});renderInv();programarSync();toast('Eliminado','aviso');}
+function eliminarProducto(id){
+  var p=productos.find(function(x){return x.id===id;});
+  if(!confirm('¿Eliminar "'+p.nombre+'"?'))return;
+  sbUpdate('productos', id, {activa: false})
+    .then(function(){
+      productos=productos.filter(function(x){return x.id!==id;});
+      localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+      renderInv();
+      toast('Producto eliminado','ok');
+    })
+    .catch(function(e){
+      console.error('Error al eliminar:', e);
+      toast('Error al eliminar','mal');
+    });
+}
 
 // ── HISTORIAL ──
 function renderHistorial(){
@@ -2140,13 +2347,24 @@ function confirmarMover() {
   var cant = parseInt(document.getElementById('mover-cant').value);
   if (!cant || cant <= 0) { toast('Ingresa una cantidad','mal'); return; }
   var p = productos.find(function(x){ return x.id === moviendoId; });
-  if (cant > p.stockDeposito) { toast('Solo hay '+p.stockDeposito+' en deposito','mal'); return; }
-  p.stockDeposito -= cant;
-  p.stock += cant;
-  cerrarMover();
-  renderInv();
-  programarSync();
-  toast('Movidas '+cant+' uds al negocio. Negocio: '+p.stock+' / Deposito: '+p.stockDeposito, 'ok');
+  if (cant > (p.stockDeposito||0)) { toast('Solo hay '+(p.stockDeposito||0)+' en deposito','mal'); return; }
+  
+  var nuevoStockDep = (p.stockDeposito||0) - cant;
+  var nuevoStock = (p.stock||0) + cant;
+  
+  sbUpdate('productos', moviendoId, { stock: nuevoStock, stockDeposito: nuevoStockDep })
+    .then(function(){
+      p.stockDeposito = nuevoStockDep;
+      p.stock = nuevoStock;
+      localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+      cerrarMover();
+      renderInv();
+      toast('Movidas '+cant+' uds al negocio. Negocio: '+nuevoStock+' / Deposito: '+nuevoStockDep, 'ok');
+    })
+    .catch(function(e){
+      console.error('Error:', e);
+      toast('Error al mover stock','mal');
+    });
 }
 
 // REPORTES
