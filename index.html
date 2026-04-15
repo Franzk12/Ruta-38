@@ -1717,55 +1717,54 @@ function programarSync() {
   }, 1000);
 }
 
-function guardarVenta(venta) {
-  setSync('syncing','Guardando venta…');
-  var ventaRow = {
-    fecha: new Date().toISOString(),
-    total: parseFloat(venta.total) || 0,
-    pago: parseFloat(venta.pago) || 0,
-    vuelto: parseFloat(venta.vuelto) || 0
-  };
-  
-  sbPost('ventas', ventaRow)
-    .then(function(res) {
-      var ventaId = res[0].id;
-      console.log('✓ Venta guardada con ID:', ventaId);
-      
-      // 2. Guardar items y actualizar stock
-      var promesas = venta.items.map(function(item) {
-        var prod = productos.find(function(p) { return p.nombre === item.name; });
-        return sbPost('items', {
-          venta_id: ventaId,
-          producto_id: prod ? prod.id : null,
-          cantidad: parseInt(item.qty),
-          precio: parseFloat(item.price),
-          subtotal: parseFloat(item.price) * parseInt(item.qty)
-        });
+async function guardarVenta(venta) {
+  try {
+    setSync('syncing','Guardando venta…');
+    console.log('📤 Iniciando guardado de venta #' + venta.id);
+    
+    var ventaRow = {
+      fecha: new Date().toISOString(),
+      total: parseFloat(venta.total) || 0,
+      pago: parseFloat(venta.pago) || 0,
+      vuelto: parseFloat(venta.vuelto) || 0
+    };
+    
+    // 1. Guardar venta
+    var res = await sbPost('ventas', ventaRow);
+    var ventaId = res[0].id;
+    console.log('✓ Venta #' + venta.id + ' guardada en BD con ID:', ventaId);
+    
+    // 2. Guardar items
+    for (var i = 0; i < (venta.items || []).length; i++) {
+      var item = venta.items[i];
+      await sbPost('items', {
+        venta_id: ventaId,
+        producto_id: item.id || null,
+        cantidad: parseInt(item.qty),
+        precio: parseFloat(item.price),
+        subtotal: parseFloat(item.price) * parseInt(item.qty)
       });
-      
-      return Promise.all(promesas);
-    })
-    .then(function() {
-      console.log('✓ Items guardados');
-      
-      // 3. Actualizar stock en BD
-      var promesas = venta.items.map(function(item) {
-        var prod = productos.find(function(p) { return p.nombre === item.name; });
-        if (!prod) return Promise.resolve();
-        return sbUpdate('productos', prod.id, { stock: prod.stock });
-      });
-      
-      return Promise.all(promesas);
-    })
-    .then(function() {
-      console.log('✓ Stock actualizado');
-      setSync('ok','Guardado ✓');
-    })
-    .catch(function(err) {
-      console.error('✗ Error al guardar venta:', err);
-      setSync('error','Error al guardar venta');
-      toast('Error al guardar venta. Revise la consola.','mal');
-    });
+    }
+    console.log('✓ Items registrados (' + (venta.items || []).length + ' items)');
+    
+    // 3. Actualizar stock en BD
+    for (var j = 0; j < (venta.items || []).length; j++) {
+      var item = venta.items[j];
+      if (!item.id) continue;
+      var prod = productos.find(function(p) { return p.id === item.id; });
+      if (!prod) continue;
+      await sbUpdate('productos', item.id, { stock: prod.stock });
+      console.log('✓ Stock actualizado para', item.id, '- nuevo stock:', prod.stock);
+    }
+    
+    console.log('✓✓✓ VENTA COMPLETAMENTE GUARDADA ✓✓✓');
+    setSync('ok','Guardado ✓');
+    
+  } catch(err) {
+    console.error('✗ Error al guardar venta:', err);
+    setSync('error','Error al guardar venta');
+    toast('Error al guardar venta. Revise la consola.','mal');
+  }
 }
 
 function cargarDeSupabase() {
@@ -2078,7 +2077,7 @@ function cobrar(){
   var total=carro.reduce(function(s,i){return s+i.precio*i.qty;},0), pago=parseFloat(document.getElementById('pago-input').value)||0;
   if(pago<total){toast('El pago es menor al total','mal');return;}
   carro.forEach(function(item){var p=productos.find(function(x){return x.id===item.id;});if(p)p.stock-=item.qty;});
-  var venta={id:ventaNum++,date:new Date().toLocaleString('es-AR'),items:carro.map(function(i){return{name:i.nombre,qty:i.qty,price:i.precio};}),total:total,pago:pago,vuelto:pago-total};
+  var venta={id:ventaNum++,date:new Date().toLocaleString('es-AR'),items:carro.map(function(i){return{id:i.id,name:i.nombre,qty:i.qty,price:i.precio};}),total:total,pago:pago,vuelto:pago-total};
   localStorage.setItem('rpos_vnum',ventaNum);
   historial.unshift(venta); localStorage.setItem('rpos_cache_hist',JSON.stringify(historial));
   var itemsVendidos = carro.slice(); // guardar antes de vaciar
