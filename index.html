@@ -1570,16 +1570,6 @@ function setSync(state, txt) {
   document.getElementById('sync-lbl').textContent = txt;
 }
 
-async function sbPost(tabla, data) {
-  const url = SUPABASE_URL + '/rest/v1/' + tabla;
-
-  console.log('ENVIANDO:', data);
-
-async function sbPost(tabla, data) {
-  const url = SUPABASE_URL + '/rest/v1/' + tabla;
-
-  console.log('ENVIANDO:', data); // 👈 ACÁ
-
 function sbGet(table, params) {
   var url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
   if (params) url += '&' + params;
@@ -1622,13 +1612,6 @@ async function sbPost(tabla, data) {
 
 // evita error del botón
 function ir() {}
-  if (!r.ok) {
-    console.error('ERROR SUPABASE:', text);
-    throw new Error(text);
-  }
-
-  return text ? JSON.parse(text) : null;
-}
 
 function sbUpsert(table, data) {
   return fetch(SUPABASE_URL + '/rest/v1/' + table, {
