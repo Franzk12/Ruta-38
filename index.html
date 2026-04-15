@@ -1975,16 +1975,26 @@ function abrirModal(id){
 }
 function cerrarModal(){document.getElementById('modal-overlay').classList.add('hidden');editandoId=null;}
 async function guardarProducto(){
-  var codigo=document.getElementById('f-codigo').value.trim();
+var codigo = document.getElementById('f-codigo').value.trim();
+codigo = codigo === "" ? null : Number(codigo);
   var nombre=document.getElementById('f-nombre').value.trim();
   var categoria=document.getElementById('f-cat').value;
   var marca=document.getElementById('f-marca').value;
-  var precio=parseFloat(document.getElementById('f-precio').value);
-  var costo=parseFloat(document.getElementById('f-costo').value)||0;
-  var stock=parseInt(document.getElementById('f-stock').value);
-  var stockDep=parseInt(document.getElementById('f-stockdep').value)||0;
-  var minStock=parseInt(document.getElementById('f-minstock').value)||0;
+  var precio = parseFloat(document.getElementById('f-precio').value);
+if (isNaN(precio)) precio = 0;
 
+var costo = parseFloat(document.getElementById('f-costo').value);
+if (isNaN(costo)) costo = 0;
+
+var stock = parseInt(document.getElementById('f-stock').value);
+if (isNaN(stock)) stock = 0;
+
+var stockDep = parseInt(document.getElementById('f-stockdep').value);
+if (isNaN(stockDep)) stockDep = 0;
+
+var minStock = parseInt(document.getElementById('f-minstock').value);
+if (isNaN(minStock)) minStock = 0;
+  
   if(!nombre){toast('Falta el nombre','mal');return;}
   if(!categoria){toast('Elegí una categoría','mal');return;}
   if(isNaN(precio)){toast('Ingresá el precio','mal');return;}
@@ -2001,7 +2011,7 @@ async function guardarProducto(){
     stockDeposito: stockDep,
     minStock: minStock
   };
-
+  
   console.log('ENVIANDO:', producto); // 👈 CLAVE
 
   try {
