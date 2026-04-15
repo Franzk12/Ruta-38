@@ -1570,26 +1570,31 @@ function setSync(state, txt) {
   document.getElementById('sync-lbl').textContent = txt;
 }
 
-function sbGet(table, params) {
-  var url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
-  if (params) url += '&' + params;
-  return fetch(url, {
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY
-    }
-  }).then(function(r) {
-   async function sbPost(tabla, data) {
-  const r = await fetch(`TU_URL`, {
+async function sbPost(tabla, data) {
+  const url = SUPABASE_URL + '/rest/v1/' + tabla;
+
+  console.log('ENVIANDO:', data);
+
+  const r = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'apikey': 'TU_API_KEY',
-      'Authorization': 'Bearer TU_API_KEY'
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Prefer': 'return=representation'
     },
     body: JSON.stringify(data)
   });
 
+  const text = await r.text();
+
+  if (!r.ok) {
+    console.error('ERROR SUPABASE:', text);
+    throw new Error(text);
+  }
+
+  return text ? JSON.parse(text) : null;
+}
   const text = await r.text();
 
   if (!r.ok) {
