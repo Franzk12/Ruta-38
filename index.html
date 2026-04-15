@@ -1565,14 +1565,11 @@ var ventaNum = parseInt(localStorage.getItem('rpos_vnum') || '1');
 var syncTimer = null;
 
 // ── SUPABASE HELPERS ──
-// =======================
-// 🔄 ESTADO DE SYNC
-// =======================
+function setSync(state, txt) {
+  document.getElementById('sync-dot').className = 'sync-dot ' + state;
+  document.getElementById('sync-lbl').textContent = txt;
+}
 
-
-// =======================
-// 📥 GET
-// =======================
 function sbGet(table, params) {
   var url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
   if (params) url += '&' + params;
@@ -1587,9 +1584,6 @@ function sbGet(table, params) {
   });
 }
 
-// =======================
-// 📤 POST
-// =======================
 async function sbPost(tabla, data) {
   const url = SUPABASE_URL + '/rest/v1/' + tabla;
 
@@ -1616,149 +1610,88 @@ async function sbPost(tabla, data) {
   return text ? JSON.parse(text) : null;
 }
 
-// =======================
-// ✏️ UPDATE
-// =======================
-async function sbUpdate(tabla, id, data) {
-  const url = `${SUPABASE_URL}/rest/v1/${tabla}?id=eq.${id}`;
-
-  const r = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY
-    },
-    body: JSON.stringify(data)
-  });
-
-  if (!r.ok) {
-    const text = await r.text();
-    console.error('ERROR UPDATE:', text);
-    throw new Error(text);
-  }
-}
-
-// =======================
-// 🚫 BOTÓN FALTANTE
-// =======================
+// evita error del botón
 function ir() {}
 
-// =======================
-// 💾 SYNC PRODUCTOS
-// =======================
+function sbUpsert(table, data) {
+  return fetch(SUPABASE_URL + '/rest/v1/' + table, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal'
+    },
+    body: JSON.stringify(data)
+  }).then(function(r) {
+    if (!r.ok) throw new Error('Error ' + r.status);
+    return r;
+  });
+}
+
 function programarSync() {
   clearTimeout(syncTimer);
-
-  syncTimer = setTimeout(async function(){
-    try {
-      setSync('syncing','Guardando…');
-
-      for (let p of productos) {
-        await sbPost('productos', {
-          codigo: p.codigo || null,
-          nombre: p.nombre,
-          categoria: p.categoria || null,
-          marca: p.marca || null,
-          precio: p.precio || 0,
-          costo: p.costo || 0,
-          stock: p.stock || 0,
-          stockDeposito: p.stockDeposito || 0,
-          minStock: p.minStock || 0
-        });
-      }
-
-      setSync('ok','Guardado ✓');
-      localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
-
-    } catch(e) {
-      console.error(e);
-      setSync('error','Error al guardar');
-    }
+  syncTimer = setTimeout(function(){
+    setSync('syncing','Guardando…');
+    sbUpsert('productos', productos)
+      .then(function(){
+        setSync('ok','Guardado ✓');
+        localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+      })
+      .catch(function(){ setSync('error','Error al guardar'); });
   }, 1000);
 }
 
-// =======================
-// 🧾 GUARDAR VENTA
-// =======================
-async function guardarVenta(venta) {
-  try {
-    setSync('syncing','Guardando venta…');
-
-    // 1. crear venta
-    const res = await sbPost('ventas', {
-      total: venta.total || 0,
-      pago: venta.pago || 0,
-      vuelto: venta.vuelto || 0
-    });
-
-    const ventaId = res[0].id;
-
-    // 2. crear items
-    for (let it of (venta.items || [])) {
-      await sbPost('items', {
-        venta_id: ventaId,
-        producto_id: it.id,
-        nombre: it.nombre,
-        cantidad: it.qty,
-        precio: it.precio,
-        subtotal: it.subtotal
-      });
-
-      // 3. actualizar stock
-      await sbUpdate('productos', it.id, {
-        stock: it.stock - it.qty
-      });
-    }
-
-    setSync('ok','Venta guardada ✓');
-
-  } catch(e) {
-    console.error(e);
-    setSync('error','Error al guardar venta');
-  }
+function guardarVenta(venta) {
+  setSync('syncing','Guardando venta…');
+  var ventaRow = {
+    id: venta.id,
+    date: venta.date,
+    total: venta.total,
+    pago: venta.pago,
+    vuelto: venta.vuelto
+  };
+  var itemsRows = (venta.items || []).map(function(it) {
+    return {
+      sale_id: venta.id,
+      name: it.nombre || it.name,
+      qty: it.qty,
+      price: it.precio || it.price,
+      subtotal: it.subtotal
+    };
+  });
+  sbPost('ventas', ventaRow)
+    .then(function(){
+      if (itemsRows.length > 0) return sbPost('items', itemsRows);
+    })
+    .then(function(){ setSync('ok','Guardado ✓'); })
+    .catch(function(){ setSync('error','Error al guardar venta'); });
 }
 
-// =======================
-// 🔄 CARGAR DATOS
-// =======================
 function cargarDeSupabase() {
   setSync('syncing','Sincronizando…');
-
-  // PRODUCTOS
   sbGet('productos', 'order=nombre.asc')
     .then(function(data) {
       if (data && data.length > 0) {
-        productos = data;
+        productos = data.map(norm);
         localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
         renderInv();
       }
       setSync('ok','Conectado ✓');
     })
-    .catch(function(){
-      setSync('error','Sin conexión');
-    });
-
-  // VENTAS
+    .catch(function(){ setSync('error','Sin conexión'); });
   sbGet('ventas', 'order=id.desc&limit=100')
     .then(function(data) {
       if (data) {
         historial = data.map(function(s){
-          return {
-            id: s.id,
-            date: s.fecha,
-            total: parseFloat(s.total) || 0,
-            pago: parseFloat(s.pago) || 0,
-            vuelto: parseFloat(s.vuelto) || 0,
-            items: []
-          };
+          return {id:s.id,date:s.date,total:parseFloat(s.total)||0,pago:parseFloat(s.pago)||0,vuelto:parseFloat(s.vuelto)||0,items:[]};
         });
-
         localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
       }
     })
     .catch(function(){});
 }
+
 // ── INICIO ──
 function init() {
   productos = JSON.parse(localStorage.getItem('rpos_cache_prod') || '[]');
