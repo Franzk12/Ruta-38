@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ruta 38 Repuestos</title>
+<link rel="icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIA">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   /* ═══════════════════════════════════════════
@@ -1695,24 +1696,20 @@ function programarSync() {
 function guardarVenta(venta) {
   setSync('syncing','Guardando venta…');
   var ventaRow = {
-    total: venta.total,
-    pago: venta.pago,
-    vuelto: venta.vuelto
+    fecha: new Date().toISOString(),
+    total: parseFloat(venta.total) || 0,
+    pago: parseFloat(venta.pago) || 0,
+    vuelto: parseFloat(venta.vuelto) || 0
   };
-  var itemsRows = (venta.items || []).map(function(it) {
-    return {
-      nombre: it.nombre || it.name,
-      cantidad: it.qty || it.cantidad,
-      precio: it.precio || it.price,
-      subtotal: (it.qty || it.cantidad) * (it.precio || it.price)
-    };
-  });
   sbPost('ventas', ventaRow)
-    .then(function(){
-      if (itemsRows.length > 0) return sbPost('items', itemsRows);
+    .then(function(res) {
+      console.log('✓ Venta guardada:', res);
+      setSync('ok','Guardado ✓');
     })
-    .then(function(){ setSync('ok','Guardado ✓'); })
-    .catch(function(){ setSync('error','Error al guardar venta'); });
+    .catch(function(err) {
+      console.error('✗ Error al guardar venta:', err);
+      setSync('error','Error al guardar venta');
+    });
 }
 
 function cargarDeSupabase() {
@@ -1731,7 +1728,7 @@ function cargarDeSupabase() {
     .then(function(data) {
       if (data) {
         historial = data.map(function(s){
-          return {id:s.id,date:s.date,total:parseFloat(s.total)||0,pago:parseFloat(s.pago)||0,vuelto:parseFloat(s.vuelto)||0,items:[]};
+          return {id:s.id,date:s.fecha,total:parseFloat(s.total)||0,pago:parseFloat(s.pago)||0,vuelto:parseFloat(s.vuelto)||0,items:[]};
         });
         localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
       }
