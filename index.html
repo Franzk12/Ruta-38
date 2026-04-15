@@ -2598,59 +2598,27 @@ function verDetalleVenta(id) {
     itemsHtml = '<div style="color:var(--muted);font-size:12px;padding:10px 0;">Sin detalle disponible</div>';
   }
   var anulBadge = v.anulada ? '<span class="badge-anulada" style="margin-left:8px;">ANULADA</span>' : '';
-  document.getElementById('detalle-venta-body').innerHTML = itemsHtml;
   
+  var detailHTML = '<div style="margin-bottom:14px;">'+
+    '<div style="font-family:var(--mono);font-size:12px;color:var(--muted);">'+fm+'</div>'+
+    '<div style="font-size:16px;font-weight:600;margin-top:4px;">Comprobante #'+String(v.id).padStart(4,'0')+anulBadge+'</div>'+
+  '</div>'+
+  '<div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:14px;">'+
+    itemsHtml+
+  '</div>'+
+  '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent);">'+
+    '<span>TOTAL</span><span>$'+parseFloat(v.total).toFixed(2)+'</span>'+
+  '</div>';
+  
+  if (!v.anulada) {
+    detailHTML += '<button class="btn-anular" style="width:100%;margin-top:14px;padding:9px;" data-id="'+v.id+'" onclick="anularVenta(this.dataset.id);cerrarDetalleVenta();">Anular esta venta</button>';
+  }
+  
+  document.getElementById('detalle-venta-body').innerHTML = detailHTML;
   var modalDetalle = document.getElementById('modal-detalle-venta');
   if (modalDetalle) {
-    modalDetalle.querySelector('.modal-title').textContent = 'Venta #' + String(v.id).padStart(4,'0') + ' ' + anulBadge;
     modalDetalle.classList.remove('hidden');
   }
-}
-
-// ── CERRAR MODAL ──
-function closeModal(modal) {
-  if (!modal) return;
-  modal.classList.add('hidden');
-}
-
-document.addEventListener('click', function(e) {
-  if (e.target.classList.contains('overlay')) {
-    e.target.classList.add('hidden');
-  }
-  if (e.target.classList.contains('close-modal')) {
-    var modal = e.target.closest('.overlay');
-    if (modal) modal.classList.add('hidden');
-  }
-});
-
-// ── CERRAR CUALQUIER MODAL CON ESC ──
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    document.querySelectorAll('.overlay').forEach(function(m) {
-      m.classList.add('hidden');
-    });
-  }
-});
-
-// ── INICIALIZAR APP ──
-init();
-</script>
-</body>
-</html>
-    '<div style="margin-bottom:14px;">'+
-      '<div style="font-family:var(--mono);font-size:12px;color:var(--muted);">'+fm+'</div>'+
-      '<div style="font-size:16px;font-weight:600;margin-top:4px;">Comprobante #'+String(v.id).padStart(4,'0')+anulBadge+'</div>'+
-    '</div>'+
-    '<div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:14px;">'+
-      itemsHtml+
-    '</div>'+
-    '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent);">'+
-      '<span>TOTAL</span><span>$'+parseFloat(v.total).toFixed(2)+'</span>'+
-    '</div>'+
-    (!v.anulada ?
-      '<button class="btn-anular" style="width:100%;margin-top:14px;padding:9px;" data-id="'+v.id+'" onclick="anularVenta(this.dataset.id);cerrarDetalleVenta();">Anular esta venta</button>'
-    : '');
-  document.getElementById('modal-detalle-venta').classList.remove('hidden');
 }
 function cerrarDetalleVenta() { document.getElementById('modal-detalle-venta').classList.add('hidden'); }
 
@@ -2758,12 +2726,36 @@ function marcasRenderTags() {
 }
 
 function marcasCargar(val) {
-  // val puede ser "Chevrolet - Corsa|Chevrolet - Agile" o un valor simple
   marcasSeleccionadas = val ? val.split('|').filter(function(m){ return m.trim(); }) : [];
   marcasRenderTags();
 }
 
+// ── CERRAR MODAL ──
+function closeModal(modal) {
+  if (!modal) return;
+  modal.classList.add('hidden');
+}
 
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('overlay')) {
+    e.target.classList.add('hidden');
+  }
+  if (e.target.classList.contains('close-modal')) {
+    var modal = e.target.closest('.overlay');
+    if (modal) modal.classList.add('hidden');
+  }
+});
+
+// ── CERRAR CUALQUIER MODAL CON ESC ──
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.overlay').forEach(function(m) {
+      m.classList.add('hidden');
+    });
+  }
+});
+
+// ── INICIALIZAR APP ──
 init();
 </script>
 </body>
