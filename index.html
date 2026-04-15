@@ -1553,7 +1553,10 @@ button { cursor: pointer; pointer-events: auto !important; }
 <div class="alerta-modal" id="alerta-stock-modal" style="display:none;"></div>
 
 <script>
-var SHEET_URL = 'https://script.google.com/macros/s/AKfycbw3H2J4ubC3fbOpDykEm6ADiW2luKsh0w82tqll7wpZ15_P8KWHjtOIE7BH7c7U67yk/exec';
+// ── SUPABASE CONFIG ── Reemplazá con tus credenciales ──
+var SUPABASE_URL = 'https://ooykgsevffkwoxgjbfmr.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9veWtnc2V2ZmZrd294Z2piZm1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyMTgyMjUsImV4cCI6MjA5MTc5NDIyNX0.CPwqdhXVmOFLsnFeL8_gUaDvjVKe67doTDgAx2Hyqkc';
+
 var productos = [];
 var historial = [];
 var carro = [];
@@ -1561,57 +1564,119 @@ var editandoId = null;
 var ventaNum = parseInt(localStorage.getItem('rpos_vnum') || '1');
 var syncTimer = null;
 
-// ── SHEETS (nunca bloquea) ──
+// ── SUPABASE HELPERS ──
 function setSync(state, txt) {
   document.getElementById('sync-dot').className = 'sync-dot ' + state;
   document.getElementById('sync-lbl').textContent = txt;
 }
-function sheetsGet(action, cb) {
-  fetch(SHEET_URL + '?action=' + action)
-    .then(function(r){ return r.json(); })
-    .then(function(d){ if(cb) cb(d); })
-    .catch(function(){ setSync('error','Sin conexión'); });
+
+function sbGet(table, params) {
+  var url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
+  if (params) url += '&' + params;
+  return fetch(url, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY
+    }
+  }).then(function(r) {
+    if (!r.ok) throw new Error('Error ' + r.status);
+    return r.json();
+  });
 }
-function sheetsPost(data, cb) {
-  fetch(SHEET_URL, {method:'POST', body:JSON.stringify(data)})
-    .then(function(r){ return r.json(); })
-    .then(function(d){ if(cb) cb(d); })
-    .catch(function(){ setSync('error','Error al guardar'); });
+
+function sbPost(table, data) {
+  return fetch(SUPABASE_URL + '/rest/v1/' + table, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify(data)
+  }).then(function(r) {
+    if (!r.ok) throw new Error('Error ' + r.status);
+    return r;
+  });
 }
+
+function sbUpsert(table, data) {
+  return fetch(SUPABASE_URL + '/rest/v1/' + table, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal'
+    },
+    body: JSON.stringify(data)
+  }).then(function(r) {
+    if (!r.ok) throw new Error('Error ' + r.status);
+    return r;
+  });
+}
+
 function programarSync() {
   clearTimeout(syncTimer);
   syncTimer = setTimeout(function(){
     setSync('syncing','Guardando…');
-    sheetsPost({action:'syncProducts', products:productos}, function(){
-      setSync('ok','Guardado ✓');
-      localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
-    });
+    sbUpsert('productos', productos)
+      .then(function(){
+        setSync('ok','Guardado ✓');
+        localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+      })
+      .catch(function(){ setSync('error','Error al guardar'); });
   }, 1000);
 }
+
 function guardarVenta(venta) {
   setSync('syncing','Guardando venta…');
-  sheetsPost({action:'saveSale', sale:venta}, function(){
-    setSync('ok','Guardado ✓');
+  var ventaRow = {
+    id: venta.id,
+    date: venta.date,
+    total: venta.total,
+    pago: venta.pago,
+    vuelto: venta.vuelto
+  };
+  var itemsRows = (venta.items || []).map(function(it) {
+    return {
+      sale_id: venta.id,
+      name: it.nombre || it.name,
+      qty: it.qty,
+      price: it.precio || it.price,
+      subtotal: it.subtotal
+    };
   });
+  sbPost('ventas', ventaRow)
+    .then(function(){
+      if (itemsRows.length > 0) return sbPost('items', itemsRows);
+    })
+    .then(function(){ setSync('ok','Guardado ✓'); })
+    .catch(function(){ setSync('error','Error al guardar venta'); });
 }
-function cargarDeSheets() {
+
+function cargarDeSupabase() {
   setSync('syncing','Sincronizando…');
-  sheetsGet('getProducts', function(d){
-    if (d && d.ok && d.products && d.products.length > 0) {
-      productos = d.products.map(norm);
-      localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
-      renderInv();
-    }
-    setSync('ok','Conectado ✓');
-  });
-  sheetsGet('getSales', function(d){
-    if (d && d.ok && d.sales) {
-      historial = d.sales.map(function(s){
-        return {id:s.id,date:s.date,total:parseFloat(s.total)||0,pago:parseFloat(s.pago)||0,vuelto:parseFloat(s.vuelto)||0,items:[]};
-      }).reverse();
-      localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
-    }
-  });
+  sbGet('productos', 'order=nombre.asc')
+    .then(function(data) {
+      if (data && data.length > 0) {
+        productos = data.map(norm);
+        localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+        renderInv();
+      }
+      setSync('ok','Conectado ✓');
+    })
+    .catch(function(){ setSync('error','Sin conexión'); });
+  sbGet('ventas', 'order=id.desc&limit=100')
+    .then(function(data) {
+      if (data) {
+        historial = data.map(function(s){
+          return {id:s.id,date:s.date,total:parseFloat(s.total)||0,pago:parseFloat(s.pago)||0,vuelto:parseFloat(s.vuelto)||0,items:[]};
+        });
+        localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
+      }
+    })
+    .catch(function(){});
 }
 
 // ── INICIO ──
@@ -1620,7 +1685,7 @@ function init() {
   historial = JSON.parse(localStorage.getItem('rpos_cache_hist') || '[]');
   renderInv();
   setTimeout(function(){ document.getElementById('scanner-input').focus(); }, 100);
-  setTimeout(cargarDeSheets, 800);
+  setTimeout(cargarDeSupabase, 800);
 }
 function norm(p) {
   return {
