@@ -1977,11 +1977,29 @@ function ir(t) {
 
 // ── CAJA ──
 document.addEventListener('DOMContentLoaded', function(){
-  document.getElementById('scanner-input').addEventListener('keydown', function(e){if(e.key==='Enter') escanear();});
+  var scanner = document.getElementById('scanner-input');
+  if (scanner) {
+    scanner.addEventListener('keydown', function(e){
+      if(e.key==='Enter') {
+        e.preventDefault();
+        escanear();
+      }
+    });
+  } else {
+    console.warn('⚠️ scanner-input no encontrado');
+  }
 });
+
 function escanear() {
-  var inp=document.getElementById('scanner-input'), code=inp.value.trim();
-  if(!code) return; inp.value='';
+  var inp=document.getElementById('scanner-input');
+  if(!inp) { console.error('❌ scanner-input no existe'); return; }
+  var code=inp.value.trim();
+  if(!code) return;
+  inp.value='';
+  if(!productos || productos.length === 0) {
+    toast('Cargando productos...','aviso');
+    return;
+  }
   var prod=productos.find(function(p){return String(p.codigo)===code||String(p.id)===code;});
   if(!prod){toast('Código no encontrado: '+code,'mal'); inp.focus(); return;}
   agregarAlCarro(prod); inp.focus();
@@ -2610,12 +2628,22 @@ var presNum = parseInt(localStorage.getItem('rpos_presnum') || '1');
 
 document.addEventListener('DOMContentLoaded', function(){
   var ps = document.getElementById('pres-scanner');
-  if (ps) ps.addEventListener('keydown', function(e){ if(e.key==='Enter') presEscanear(); });
+  if (ps) {
+    ps.addEventListener('keydown', function(e){ 
+      if(e.key==='Enter') {
+        e.preventDefault();
+        presEscanear(); 
+      }
+    });
+  }
 });
 
 function presEscanear() {
-  var inp=document.getElementById('pres-scanner'), code=inp.value.trim();
-  if(!code) return; inp.value='';
+  var inp=document.getElementById('pres-scanner');
+  if(!inp) return;
+  var code=inp.value.trim();
+  if(!code) return; 
+  inp.value='';
   var prod=productos.find(function(p){ return String(p.codigo)===code||String(p.id)===code; });
   if(!prod){ toast('No encontrado: '+code,'mal'); inp.focus(); return; }
   presAgregar(prod); inp.focus();
