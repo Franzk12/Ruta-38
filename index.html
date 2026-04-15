@@ -2445,18 +2445,22 @@ function anularVenta(id) {
 // ALERTA STOCK MÍNIMO POST-VENTA
 function mostrarAlertaStock(productosVendidos) {
   var bajos = [];
+
   productosVendidos.forEach(function(item){
     var p = productos.find(function(x){ return x.id===item.id; });
     if (!p) return;
+
     if (p.stock <= 0) {
       bajos.push({nombre:p.nombre, stock:p.stock, min:p.minStock, tipo:'sin-stock'});
     } else if (p.minStock > 0 && p.stock <= p.minStock) {
       bajos.push({nombre:p.nombre, stock:p.stock, min:p.minStock, tipo:'bajo'});
     }
   });
+
   if (!bajos.length) return;
 
   var modal = document.getElementById('alerta-stock-modal');
+
   modal.innerHTML =
     '<div class="alerta-modal-h">' +
       '<span>⚠️ Stock bajo después de esta venta</span>' +
@@ -2473,11 +2477,11 @@ function mostrarAlertaStock(productosVendidos) {
   clearTimeout(modal._t);
   modal._t = setTimeout(cerrarAlertaStock, 8000);
 }
+
 function cerrarAlertaStock() {
   var modal = document.getElementById('alerta-stock-modal');
   modal.style.display = 'none';
 }
-
 // HISTORIAL — VISTA LISTA vs POR DÍA
 var histVistaActual = 'lista';
 function histVista(v) {
