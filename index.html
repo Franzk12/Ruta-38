@@ -1580,56 +1580,16 @@ async function sbPost(tabla, data) {
 
   console.log('ENVIANDO:', data); // 👈 ACÁ
 
-  const r = await fetch(url, {
-    method: 'POST',
+function sbGet(table, params) {
+  var url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
+  if (params) url += '&' + params;
+
+  return fetch(url, {
     headers: {
-      'Content-Type': 'application/json',
       'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Prefer': 'return=representation'
-    },
-    body: JSON.stringify(data)
-  });
-
-  const text = await r.text();
-
-  if (!r.ok) {
-    console.error('ERROR SUPABASE:', text);
-    throw new Error(text);
-  }
-
-  return text ? JSON.parse(text) : null;
-}
-
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Prefer': 'return=representation'
-    },
-    body: JSON.stringify(data)
-  });
-
-  const text = await r.text();
-
-  if (!r.ok) {
-    console.error('ERROR SUPABASE:', text);
-    throw new Error(text);
-  }
-
-  return text ? JSON.parse(text) : null;
-}
-  const text = await r.text();
-
-  if (!r.ok) {
-    console.error('ERROR SUPABASE:', text);
-    throw new Error(text);
-  }
-
-  return text ? JSON.parse(text) : null;
-}
+      'Authorization': 'Bearer ' + SUPABASE_KEY
+    }
+  }).then(function(r) {
     return r.json();
   });
 }
@@ -1652,6 +1612,16 @@ async function sbPost(tabla, data) {
 
   const text = await r.text();
 
+  if (!r.ok) {
+    console.error('ERROR SUPABASE:', text);
+    throw new Error(text);
+  }
+
+  return text ? JSON.parse(text) : null;
+}
+
+// evita error del botón
+function ir() {}
   if (!r.ok) {
     console.error('ERROR SUPABASE:', text);
     throw new Error(text);
