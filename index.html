@@ -3777,7 +3777,7 @@
     function cerrarModal() { document.getElementById('modal-overlay').classList.add('hidden'); editandoId = null; }
     async function guardarProducto() {
       var codigo = document.getElementById('f-codigo').value.trim();
-      codigo = codigo === "" ? null : Number(codigo);
+      codigo = codigo === "" ? null : codigo;
       var nombre = document.getElementById('f-nombre').value.trim();
       var categoria = document.getElementById('f-cat').value;
       var marca = document.getElementById('f-marca').value;
