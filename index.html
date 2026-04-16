@@ -1772,7 +1772,7 @@ function cargarDeSupabase() {
   sbGet('productos', 'order=nombre.asc')
     .then(function(data) {
       if (data && data.length > 0) {
-        productos = data.map(norm);
+        productos = data.filter(p => p.activos !== false).map(norm);
         localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
         renderInv();
       }
@@ -1934,7 +1934,7 @@ function eliminarMarca(id) {
 
 // ── INICIO ──
 function init() {
-  productos = JSON.parse(localStorage.getItem('rpos_cache_prod') || '[]');
+  productos = JSON.parse(localStorage.getItem('rpos_cache_prod') || '[]').filter(p => p.activos !== false);
   historial = JSON.parse(localStorage.getItem('rpos_cache_hist') || '[]');
   renderInv();
   setTimeout(function(){ document.getElementById('scanner-input').focus(); }, 100);
@@ -1999,7 +1999,7 @@ function escanear() {
   if(!productos || productos.length === 0) {
     var cached = localStorage.getItem('rpos_cache_prod');
     if(cached) {
-      try { productos = JSON.parse(cached); } 
+      try { productos = JSON.parse(cached).filter(p => p.activos !== false); } 
       catch(e) { console.error('Error al cargar cache:', e); }
     }
   }
@@ -2376,7 +2376,7 @@ async function guardarProducto(){
 function eliminarProducto(id){
   var p=productos.find(function(x){return x.id===id;});
   if(!confirm('¿Eliminar "'+p.nombre+'"?'))return;
-  sbDelete('productos', id)
+  sbUpdate('productos', id, {activos: false})
     .then(function(){
       productos=productos.filter(function(x){return x.id!==id;});
       localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
@@ -2721,7 +2721,7 @@ function presEscanear() {
   if(!productos || productos.length === 0) {
     var cached = localStorage.getItem('rpos_cache_prod');
     if(cached) {
-      try { productos = JSON.parse(cached); } 
+      try { productos = JSON.parse(cached).filter(p => p.activos !== false); } 
       catch(e) { console.error('Error al cargar cache:', e); }
     }
   }
@@ -2732,7 +2732,7 @@ function presEscanear() {
     return;
   }
   
-  var prod=productos.find(function(p){ return String(p.codigo)===code||String(p.id)===code; });
+  var prod=productos.find(function(p){ return String(p.codigo)===code||String(p.id)===code; });}
   if(!prod){ toast('No encontrado: '+code,'mal'); inp.focus(); return; }
   presAgregar(prod); inp.focus();
 }
