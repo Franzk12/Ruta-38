@@ -1740,7 +1740,7 @@ async function guardarVenta(venta) {
       await sbPost('items', {
         venta_id: ventaId,
         producto_id: item.id || null,
-        cantidad: parseInt(item.qty),2
+        cantidad: parseInt(item.qty),
         precio: parseFloat(item.price),
         subtotal: parseFloat(item.price) * parseInt(item.qty)
       });
