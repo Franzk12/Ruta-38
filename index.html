@@ -2717,24 +2717,32 @@ function presEscanear() {
   inp.value='';
   
   // Intentar cargar del localStorage si está vacío
-  if(!productos || productos.length === 0) {
-    var cached = localStorage.getItem('rpos_cache_prod');
-    if(cached) {
-      try { productos = JSON.parse(cached).filter(function(p){return p.activos !== false;}); } 
-      catch(e) { console.error('Error al cargar cache:', e); }
-    }
+if(!productos || productos.length === 0) {
+  var cached = localStorage.getItem('rpos_cache_prod');
+  if(cached) {
+    try { productos = JSON.parse(cached).filter(function(p){return p.activos !== false;}); } 
+    catch(e) { console.error('Error al cargar cache:', e); }
   }
-  
-  if(!productos || productos.length === 0) {
-    toast('Sin productos cargados. Esperando sincronización...','aviso');
-    inp.focus();
-    return;
-  }
-  
-  var prod=productos.find(function(p){ return String(p.codigo)===code||String(p.id)===code; });}
-  if(!prod){ toast('No encontrado: '+code,'mal'); inp.focus(); return; }
-  presAgregar(prod); inp.focus();
 }
+
+if(!productos || productos.length === 0) {
+  toast('Sin productos cargados. Esperando sincronización...','aviso');
+  inp.focus();
+  return;
+}
+
+var prod = productos.find(function(p){ 
+  return String(p.codigo)===code || String(p.id)===code; 
+}); // ✅ sin llave extra
+
+if(!prod){ 
+  toast('No encontrado: '+code,'mal'); 
+  inp.focus(); 
+  return; 
+}
+
+presAgregar(prod); 
+inp.focus();
 function presBuscar() {
   var q=document.getElementById('pres-busq').value.toLowerCase().trim();
   var box=document.getElementById('pres-sugerencias');
