@@ -3232,7 +3232,7 @@
 
     function cargarDeSupabase() {
       setSync('syncing', 'Sincronizando…');
-      sbGet('productos', 'order=nombre.asc')
+      sbGet('productos', 'order=nombre.asc&activos=eq.true')
         .then(function (data) {
           if (data && data.length > 0) {
             productos = data.map(norm);
@@ -3810,7 +3810,7 @@
         costo: isNaN(costo) ? 0 : costo,
         stock: isNaN(stock) ? 0 : stock,
         stockDeposito: isNaN(stockDep) ? 0 : stockDep,
-        minStock: isNaN(minStock) ? 0 : minStock
+        minStock: isNaN(minStock) ? 0 : minStock, activos: true
       };
 
       try {
