@@ -2010,7 +2010,9 @@ function escanear() {
     return;
   }
   
-  var prod=productos.find(function(p){return String(p.codigo)===code||String(p.id)===code;});
+  var prod = productos.find(function(p){ 
+  return String(p.codigo) === code || String(p.id) === code; 
+});
   if(!prod){toast('Código no encontrado: '+code,'mal'); inp.focus(); return;}
   agregarAlCarro(prod); inp.focus();
 }
