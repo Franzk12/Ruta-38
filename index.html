@@ -3491,7 +3491,7 @@
       }).join('');
     }
     function elegirSug(id) {
-      var prod = productos.find(function (p) { return p.id === id; });
+      var prod = productos.find(function (p) { return String(p.id) === String(id); });
       if (prod) agregarAlCarro(prod);
       document.getElementById('busq-caja').value = '';
       document.getElementById('sugerencias').classList.add('hidden');
@@ -3757,7 +3757,7 @@
       editandoId = id || null;
       document.getElementById('modal-h').textContent = id ? '✏ Editar producto' : '+ Nuevo producto';
       if (id) {
-        var p = productos.find(function (x) { return x.id === id; });
+        var p = productos.find(function (x) { return String(x.id) === String(id); });
         if (!p) { toast('Producto no encontrado', 'mal'); return; }
         document.getElementById('f-id-display').textContent = p.id;
         document.getElementById('f-codigo').value = p.codigo || ''; document.getElementById('f-nombre').value = p.nombre;
@@ -3817,7 +3817,7 @@
         if (editandoId) {
           // Editar producto existente
           await sbUpdate('productos', editandoId, producto);
-          var idx = productos.findIndex(function (p) { return p.id === editandoId; });
+          var idx = productos.findIndex(function (p) { return String(p.id) === String(editandoId); });
           if (idx >= 0) productos[idx] = Object.assign({}, productos[idx], producto);
           toast('Producto actualizado ✓', 'ok');
         } else {
@@ -3840,11 +3840,11 @@
     }
 
     function eliminarProducto(id) {
-      var p = productos.find(function (x) { return x.id === id; });
+      var p = productos.find(function (x) { return String(x.id) === String(id); });
       if (!confirm('¿Eliminar "' + p.nombre + '"?')) return;
       sbUpdate('productos', id, { activos: false })
         .then(function () {
-          productos = productos.filter(function (x) { return x.id !== id; });
+          productos = productos.filter(function (x) { return String(x.id) !== String(id); });
           localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
           renderInv();
           toast('Producto eliminado', 'ok');
@@ -3908,7 +3908,7 @@
     // MOVER STOCK
     var moviendoId = null;
     function abrirMover(id) {
-      var p = productos.find(function (x) { return x.id === id; });
+      var p = productos.find(function (x) { return String(x.id) === String(id); });
       moviendoId = id;
       document.getElementById('mover-desc').textContent = p.nombre + ' - ' + p.categoria;
       document.getElementById('mover-disp').textContent = (p.stockDeposito || 0) + ' unidades en deposito';
@@ -3921,7 +3921,7 @@
     function confirmarMover() {
       var cant = parseInt(document.getElementById('mover-cant').value);
       if (!cant || cant <= 0) { toast('Ingresa una cantidad', 'mal'); return; }
-      var p = productos.find(function (x) { return x.id === moviendoId; });
+      var p = productos.find(function (x) { return String(x.id) === String(moviendoId); });
       if (cant > (p.stockDeposito || 0)) { toast('Solo hay ' + (p.stockDeposito || 0) + ' en deposito', 'mal'); return; }
 
       var nuevoStockDep = (p.stockDeposito || 0) - cant;
@@ -4225,7 +4225,7 @@
       }).join('');
     }
     function presElegirSug(id) {
-      var prod = productos.find(function (p) { return p.id === id; });
+      var prod = productos.find(function (p) { return String(p.id) === String(id); });
       if (prod) presAgregar(prod);
       document.getElementById('pres-busq').value = '';
       document.getElementById('pres-sugerencias').classList.add('hidden');
