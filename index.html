@@ -2270,7 +2270,7 @@ function renderInv(){
   grid.innerHTML=fil.map(function(p){
     var ss=p.stock===0,sb=!ss&&p.minStock>0&&p.stock<=p.minStock;
     var cls=ss?'sin-stock':sb?'stock-bajo':'', sc=ss?'rojo':sb?'amarillo':'verde', dc=p.stockDeposito>0?'verde':'gris';
-    var mg=p.costo>0?((p.precio-p.costo)/p.costo*100).toFixed(0)+'%':'—';
+    var mg=p.costo>0?((p.precio-p.costo)/p.costo*100).toFixed(0)+'%':'-';
     return '<div class="prod-card '+cls+'">'+
       '<div class="pc-head"><div><div class="pc-nombre">'+p.nombre+'</div><div class="pc-codigo">'+p.id+(p.codigo?' · '+p.codigo:'')+(p.marca?' · '+p.marca.split('|').join(', '):'')+'</div></div><div class="cat-badge">'+p.categoria+'</div></div>'+
       '<div class="pc-stats">'+
