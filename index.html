@@ -2143,6 +2143,7 @@ function mostrarTicket(v) {
         '</div>';
     });
   }
+  
 
   // ── Fila de totales ──
   function filaTotal(lbl, val, bold) {
@@ -3111,6 +3112,9 @@ document.addEventListener('keydown', function(e) {
 
 // ── INICIALIZAR APP ──
 init();
+
+<script>function ir(tabId){document.querySelectorAll('.main').forEach(el=>el.classList.remove('active'));document.getElementById('tab-'+tabId).classList.add('active');}</script>
+
 </script>
 </body>
 </html>
