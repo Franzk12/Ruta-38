@@ -1772,7 +1772,7 @@ function cargarDeSupabase() {
   sbGet('productos', 'order=nombre.asc')
     .then(function(data) {
       if (data && data.length > 0) {
-        productos = data.filter(function(p){return p.activos !== false;}).map(norm);
+        productos = data.map(norm);
         localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
         renderInv();
       }
@@ -1934,11 +1934,11 @@ function eliminarMarca(id) {
 
 // ── INICIO ──
 function init() {
-  productos = JSON.parse(localStorage.getItem('rpos_cache_prod') || '[]').filter(function(p){return p.activos !== false;});
+  productos = JSON.parse(localStorage.getItem('rpos_cache_prod') || '[]');
   historial = JSON.parse(localStorage.getItem('rpos_cache_hist') || '[]');
   renderInv();
   setTimeout(function(){ document.getElementById('scanner-input').focus(); }, 100);
-  cargarDeSupabase(); // Al iniciar, cargar INMEDIATAMENTE
+  cargarDeSupabase();
   setTimeout(cargarCategorias, 100);
   setTimeout(cargarMarcas, 200);
 }
@@ -1995,11 +1995,10 @@ function escanear() {
   if(!code) return;
   inp.value='';
   
-  // Intentar cargar del localStorage si está vacío
   if(!productos || productos.length === 0) {
     var cached = localStorage.getItem('rpos_cache_prod');
     if(cached) {
-      try { productos = JSON.parse(cached).filter(function(p){return p.activos !== false;}); } 
+      try { productos = JSON.parse(cached); } 
       catch(e) { console.error('Error al cargar cache:', e); }
     }
   }
