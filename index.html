@@ -468,6 +468,27 @@
       color: var(--accent);
       min-width: 80px;
       text-align: right;
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 2px 4px;
+      transition: background .15s;
+    }
+
+    .row-precio:hover {
+      background: rgba(249, 115, 22, .12);
+    }
+
+    .precio-edit-input {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--accent);
+      background: var(--bg);
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      padding: 2px 6px;
+      width: 90px;
+      text-align: right;
+      outline: none;
     }
 
     .btn-quitar {
@@ -1779,7 +1800,7 @@
     <!-- INVENTARIO -->
     <div class="main" id="tab-inventario">
       <div class="inv-toolbar">
-        <input class="inv-search" id="inv-search" placeholder="Buscar producto…" oninput="renderInv()">
+        <input class="inv-search" id="inv-search" placeholder="Buscar por nombre, código de barras o ID…" oninput="renderInv()">
         <select class="filter-sel" id="filter-cat" onchange="renderInv()">
           <option value="">Todas las categorías</option>
           <option>Amortiguadores</option>
@@ -3515,13 +3536,39 @@
         return '<div class="cart-row">' +
           '<div><div class="row-nombre">' + item.nombre + '</div><div class="row-meta">' + item.id + (item.codigo ? ' · ' + item.codigo : '') + ' · ' + item.categoria + (item.marca ? ' · ' + item.marca : '') + '</div></div>' +
           '<div class="qty-ctrl"><button class="qty-btn" onclick="cambiarCant(' + i + ',-1)">−</button><span class="qty-num">' + item.qty + '</span><button class="qty-btn" onclick="cambiarCant(' + i + ',1)">+</button></div>' +
-          '<div class="row-precio">$' + (item.precio * item.qty).toFixed(2) + '</div>' +
+          '<div class="row-precio" title="Click para editar precio" onclick="editarPrecio(' + i + ', this)">$' + (item.precio * item.qty).toFixed(2) + '</div>' +
           '<button class="btn-quitar" onclick="quitarItem(' + i + ')">✕</button></div>';
       }).join('');
       actualizarTotales();
     }
     function cambiarCant(i, d) { var item = carro[i], prod = productos.find(function (p) { return p.id === item.id; }), nq = item.qty + d; if (nq <= 0) { quitarItem(i); return; } if (nq > prod.stock) { toast('Stock: ' + prod.stock, 'aviso'); return; } item.qty = nq; renderCarro(); }
     function quitarItem(i) { carro.splice(i, 1); renderCarro(); }
+    function editarPrecio(i, el) {
+      var item = carro[i];
+      var precioUnit = item.precio;
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.step = '0.01';
+      input.min = '0';
+      input.className = 'precio-edit-input';
+      input.value = precioUnit.toFixed(2);
+      el.replaceWith(input);
+      input.focus();
+      input.select();
+      function confirmar() {
+        var nuevo = parseFloat(input.value);
+        if (!isNaN(nuevo) && nuevo >= 0) {
+          carro[i].precio = nuevo;
+          toast('Precio actualizado ✓', 'ok');
+        }
+        renderCarro();
+      }
+      input.addEventListener('blur', confirmar);
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); confirmar(); }
+        if (e.key === 'Escape') { renderCarro(); }
+      });
+    }
     function vaciarCarro() { carro = []; renderCarro(); document.getElementById('pago-input').value = ''; calcVuelto(); }
     function cancelarVenta() { if (!carro.length) return; if (!confirm('¿Cancelar la venta?')) return; vaciarCarro(); toast('Venta cancelada', 'aviso'); }
     function actualizarTotales() {

@@ -462,13 +462,39 @@ function renderCarro() {
     return '<div class="cart-row">' +
       '<div><div class="row-nombre">' + item.nombre + '</div><div class="row-meta">' + item.id + (item.codigo ? ' Â· ' + item.codigo : '') + ' Â· ' + item.categoria + (item.marca ? ' Â· ' + item.marca : '') + '</div></div>' +
       '<div class="qty-ctrl"><button class="qty-btn" onclick="cambiarCant(' + i + ',-1)">âˆ’</button><span class="qty-num">' + item.qty + '</span><button class="qty-btn" onclick="cambiarCant(' + i + ',1)">+</button></div>' +
-      '<div class="row-precio">$' + (item.precio * item.qty).toFixed(2) + '</div>' +
+      '<div class="row-precio" title="Click para editar precio" onclick="editarPrecio(' + i + ', this)">$' + (item.precio * item.qty).toFixed(2) + '</div>' +
       '<button class="btn-quitar" onclick="quitarItem(' + i + ')">âœ•</button></div>';
   }).join('');
   actualizarTotales();
 }
 function cambiarCant(i, d) { var item = carro[i], prod = productos.find(function (p) { return p.id === item.id; }), nq = item.qty + d; if (nq <= 0) { quitarItem(i); return; } if (nq > prod.stock) { toast('Stock: ' + prod.stock, 'aviso'); return; } item.qty = nq; renderCarro(); }
 function quitarItem(i) { carro.splice(i, 1); renderCarro(); }
+function editarPrecio(i, el) {
+  var item = carro[i];
+  var precioUnit = item.precio;
+  var input = document.createElement('input');
+  input.type = 'number';
+  input.step = '0.01';
+  input.min = '0';
+  input.className = 'precio-edit-input';
+  input.value = precioUnit.toFixed(2);
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+  function confirmar() {
+    var nuevo = parseFloat(input.value);
+    if (!isNaN(nuevo) && nuevo >= 0) {
+      carro[i].precio = nuevo;
+      toast('Precio actualizado ✓', 'ok');
+    }
+    renderCarro();
+  }
+  input.addEventListener('blur', confirmar);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); confirmar(); }
+    if (e.key === 'Escape') { renderCarro(); }
+  });
+}
 function vaciarCarro() { carro = []; renderCarro(); document.getElementById('pago-input').value = ''; calcVuelto(); }
 function cancelarVenta() { if (!carro.length) return; if (!confirm('Â¿Cancelar la venta?')) return; vaciarCarro(); toast('Venta cancelada', 'aviso'); }
 function actualizarTotales() {
