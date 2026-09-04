@@ -28,7 +28,7 @@ const marcasData = [
   'Toyota|Corolla,Camry,Hilux,Fortuner,RAV4,Yaris,Avanza,Etios,Hiace,Land Cruiser,Prius,Vios,4Runner,Sequoia,Tundra,Tacoma',
   'Ford|Fiesta,Focus,Mondeo,Ranger,F-150,Escape,Edge,Explorer,Expedition,Mustang,Fusion,Escort',
   'Chevrolet|Cruze,Spark,Onix,Aveo,Optra,Captiva,Equinox,Tahoe,Suburban,Trailblazer,Colorado',
-  'Volkswagen|Gol,Polo,Golf,Jetta,Passat,Tiguan,Touareg,Bora,Virtus,Voyage',
+  'Volkswagen|Gol,Polo,Golf,Jetta,Passat,Tiguan,Touareg,Bora,Virtus,Voyage,Beetle',
   'Honda|Civic,Accord,CR-V,Pilot,Fit,HR-V,Odyssey,Ridgeline,City,Brio',
   'Hyundai|Elantra,Sonata,Santa Fe,Tucson,i10,i20,Venue,Accent,Kona,Ioniq',
   'Kia|Cerato,Sportage,Sorento,Forte,Rio,Picanto,Seltos,Stinger',
@@ -44,7 +44,6 @@ const marcasData = [
   'BMW|320,330,520,530,X3,X5,X1,Z4,M3,M5',
   'Mercedes-Benz|C-Class,E-Class,S-Class,A-Class,GLA,GLC,GLE,GL,Sprinter',
   'Audi|A3,A4,A6,A8,Q3,Q5,Q7,TT,RS',
-  'Volkswagen|Golf,Jetta,Passat,Tiguan,Touareg,Beetle,Bora,Polo,Gol',
   'Volvo|S40,S60,S80,S90,XC60,XC90,XC40',
   'Jeep|Wrangler,Cherokee,Compass,Renegade,Patriot,Grand Cherokee',
   'Dodge|Durango,Journey,Charger,Challenger,Ram',
@@ -71,12 +70,17 @@ async function cargarDatos() {
   // 1. CARGAR CATEGORÍAS
   // ════════════════════════════════════════════════════════════════════
   console.log('📦 Cargando categorías...');
-  
+
+  // Traemos las categorías existentes una sola vez. Antes se comparaba cada
+  // categoría contra la BD con un GET por ítem — funciona igual acá, pero el
+  // mismo patrón en marcas (más abajo) comparaba mal y duplicaba en cada
+  // corrida. Se deja este mismo enfoque en los dos para que sean consistentes.
+  const catExistentes = await sbGet('categorias');
+  const catSet = new Set((catExistentes || []).map(function (c) { return c.nombre; }));
+
   for (let cat of categoriasData) {
     try {
-      // Verificar si ya existe
-      const existe = await sbGet('categorias', `nombre=eq.${encodeURIComponent(cat)}`);
-      if (existe && existe.length > 0) {
+      if (catSet.has(cat)) {
         console.log(`⏭️  ${cat} ya existe`);
         catCount++;
         continue;
@@ -87,6 +91,7 @@ async function cargarDatos() {
         nombre: cat,
         activa: true
       });
+      catSet.add(cat);
       catCount++;
       console.log(`✓ ${cat}`);
     } catch (err) {
@@ -100,15 +105,20 @@ async function cargarDatos() {
   // 2. CARGAR MARCAS Y MODELOS
   // ════════════════════════════════════════════════════════════════════
   console.log('\n🏎️  Cargando marcas y modelos...');
-  
+
+  // BUG ORIGINAL: acá se comparaba "Toyota" contra el valor guardado
+  // "Toyota|Corolla,Camry,..." con eq. — nunca matcheaba, así que cada vez que
+  // se corría este script duplicaba todas las marcas. Se arregla comparando
+  // contra el nombre de marca (antes del primer "|") de lo que ya existe en la BD.
+  const marcasExistentes = await sbGet('marcas');
+  const marcasSet = new Set((marcasExistentes || []).map(function (m) { return (m.nombre || '').split('|')[0]; }));
+
   for (let marcaStr of marcasData) {
     const [nombre, modelos] = marcaStr.split('|');
     const modelosList = modelos ? modelos.split(',').map(m => m.trim()) : [];
-    
+
     try {
-      // Verificar si la marca ya existe
-      const existe = await sbGet('marcas', `nombre=eq.${encodeURIComponent(nombre)}`);
-      if (existe && existe.length > 0) {
+      if (marcasSet.has(nombre)) {
         console.log(`⏭️  ${nombre} ya existe`);
         marcasCount++;
         continue;
@@ -120,6 +130,7 @@ async function cargarDatos() {
         nombre: marcaConModelos,
         activa: true
       });
+      marcasSet.add(nombre);
       marcasCount++;
       console.log(`✓ ${nombre} (${modelosList.length} modelos)`);
     } catch (err) {
