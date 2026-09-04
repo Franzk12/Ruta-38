@@ -3669,6 +3669,13 @@
       if (!categoria) { toast('Elegí una categoría', 'mal'); return; }
       if (isNaN(precio)) { toast('Ingresá el precio', 'mal'); return; }
       if (isNaN(stock)) { toast('Ingresá el stock del negocio', 'mal'); return; }
+      if (precio < 0 || costo < 0 || stock < 0 || stockDep < 0 || minStock < 0) {
+        toast('Los valores de precio y stock no pueden ser negativos', 'mal'); return;
+      }
+      if (codigo) {
+        var dup = productos.find(function (p) { return p.codigo === codigo && String(p.id) !== String(editandoId); });
+        if (dup) { toast('Ese código ya lo usa "' + dup.nombre + '"', 'mal'); return; }
+      }
 
       var producto = {
         codigo: codigo === "" ? null : codigo,
@@ -4122,7 +4129,7 @@
     function presVaciar() { presupuesto = []; document.getElementById('pres-desc-pct').value = ''; presRenderRows(); }
     function presCalcTotal() {
       var sub = presupuesto.reduce(function (s, i) { return s + i.precio * i.qty; }, 0);
-      var pct = parseFloat(document.getElementById('pres-desc-pct').value) || 0;
+      var pct = Math.min(100, Math.max(0, parseFloat(document.getElementById('pres-desc-pct').value) || 0));
       var desc = sub * pct / 100, total = sub - desc;
       var items = presupuesto.reduce(function (s, i) { return s + i.qty; }, 0);
       document.getElementById('pres-r-items').textContent = items;
@@ -4134,7 +4141,7 @@
     }
     function presGenerar() {
       var sub = presupuesto.reduce(function (s, i) { return s + i.precio * i.qty; }, 0);
-      var pct = parseFloat(document.getElementById('pres-desc-pct').value) || 0;
+      var pct = Math.min(100, Math.max(0, parseFloat(document.getElementById('pres-desc-pct').value) || 0));
       var desc = sub * pct / 100, total = sub - desc;
       var fecha = new Date().toLocaleDateString('es-AR');
       var num = presNum++; localStorage.setItem('rpos_presnum', presNum);
