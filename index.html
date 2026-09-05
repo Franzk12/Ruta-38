@@ -3165,7 +3165,7 @@
       var input = document.getElementById('cat-nueva');
       var nombre = input.value.trim();
       if (!nombre) { toast('Ingresa un nombre de categoría', 'mal'); return; }
-      if (categorias.some(function (c) { return c.nombre === nombre; })) {
+      if (categorias.some(function (c) { return c.nombre.toLowerCase() === nombre.toLowerCase(); })) {
         toast('Esta categoría ya existe', 'aviso');
         return;
       }
@@ -3195,7 +3195,7 @@
       var input = document.getElementById('marca-nueva');
       var nombre = input.value.trim();
       if (!nombre) { toast('Ingresa un nombre de marca', 'mal'); return; }
-      if (marcas.some(function (m) { return m.nombre === nombre; })) {
+      if (marcas.some(function (m) { return m.nombre.toLowerCase() === nombre.toLowerCase(); })) {
         toast('Esta marca ya existe', 'aviso');
         return;
       }
