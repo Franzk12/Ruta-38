@@ -3,11 +3,14 @@
 Sistema de punto de venta para repuestos de autos. Es una aplicación de una sola página (`index.html`), sin instalación ni build: se abre directo en el navegador.
 
 ## Cómo usar
-Abrir `index.html` en el navegador (Chrome o Edge recomendado). La primera vez en cada PC pide el **email y la contraseña del local** (la sesión queda guardada) y después el **PIN** de bloqueo.
+Abrir `index.html` en el navegador (Chrome o Edge recomendado). La primera vez en cada PC pide el **email y la contraseña del local** (la sesión queda guardada).
 
 ## Funciones
 - **Caja / Ventas** — escaneo de código de barras, carrito, cobro y emisión de ticket (impresora POS 80mm)
 - **Inventario** — alta/baja/edición de productos, transferencia depósito ↔ negocio, aumento masivo de precios
+  - **⚡ Carga rápida:** escanear códigos para sumar stock o crear productos nuevos con un formulario corto (sin mouse)
+  - **📥 Importar:** carga masiva desde Excel, CSV o una tabla pegada (PDF, mail, WhatsApp), con vista previa antes de guardar y plantilla descargable
+  - **⧉ Similar:** crear un producto nuevo copiando otro
 - **Historial** — ventas por lista o agrupadas por día, anulación con devolución de stock
 - **Reportes** — métricas por día/semana/mes, gráfico de ventas y ranking de productos
 - **Presupuesto** — cotizador para clientes con descuento, no descuenta stock
@@ -21,7 +24,6 @@ Los datos viven en **Supabase** (backend en la nube, tablas `productos`, `ventas
 
 ## Acceso
 - **Login (email + contraseña del local):** es lo que protege los datos. Sin sesión, la base no deja leer ni escribir nada, aunque alguien tenga la `anon key` que queda visible en el código. La sesión se renueva sola; se cierra desde **Admin → Cerrar sesión**.
-- **PIN** (`APP_PIN` en el `<script>` de `index.html`): solo bloquea la pantalla cuando te alejás de la caja (botón 🔒), sin cerrar la sesión.
 
 ## Stock entre varias cajas
 Las ventas, anulaciones y movimientos depósito → negocio se hacen con funciones de la base (`registrar_venta`, `anular_venta`, `mover_stock`) que suman o restan **en Supabase**. Dos cajas que venden el mismo producto al mismo tiempo no se pisan, y una venta reintentada desde la cola offline no se duplica.
