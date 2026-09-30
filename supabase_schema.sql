@@ -14,7 +14,7 @@
 --      del local (marcar "Auto Confirm User")
 --   6. Authentication → Sign In / Providers → DESACTIVAR
 --      "Allow new users to sign up" (ver nota en la sección RLS)
---   7. Abrir index.html, entrar con ese email/contraseña y el PIN, y en la
+--   7. Abrir index.html, entrar con ese email/contraseña, y en la
 --      consola (F12) pegar cargar_datos.js para precargar categorías y marcas
 --
 -- ¿La base ya existía con una versión anterior? No corras este archivo:
