@@ -2814,6 +2814,13 @@
     var categorias = [];
     var marcas = [];
 
+    // Escapa texto para meterlo en innerHTML / atributos (nombres con comillas, <, &, etc.)
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
     // ── SUPABASE HELPERS ──
     function setSync(state, txt) {
       document.getElementById('sync-dot').className = 'sync-dot ' + state;
@@ -2935,62 +2942,89 @@
       });
     }
 
-    function programarSync() {
-      clearTimeout(syncTimer);
-      syncTimer = setTimeout(function () {
-        setSync('syncing', 'Guardando…');
-        sbUpsert('productos', productos)
-          .then(function () {
-            setSync('ok', 'Guardado ✓');
-            localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
-          })
-          .catch(function () { setSync('error', 'Error al guardar'); });
-      }, 1000);
+    // Guarda solo las filas/columnas indicadas — nunca el catálogo entero, para no pisar
+    // con datos viejos de este navegador cambios hechos desde otra PC.
+    function guardarProductosParciales(filas) {
+      if (!filas.length) return Promise.resolve();
+      setSync('syncing', 'Guardando…');
+      return sbUpsert('productos', filas)
+        .then(function () {
+          setSync('ok', 'Guardado ✓');
+          localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+        })
+        .catch(function (e) { console.error('Error al guardar productos:', e); setSync('error', 'Error al guardar'); throw e; });
     }
+
+    // La columna ventas.metodo se agregó después (ver supabase_schema.sql). Si la base todavía
+    // no la tiene, se guarda la venta sin ese dato en vez de dejarla trabada en la cola.
+    var metodoSoportado = true;
+
+    function mismaVenta(a, b) { return a.uid ? a.uid === b.uid : String(a.id) === String(b.id); }
 
     // Hace el guardado real en Supabase. Puede tirar excepción — la usan tanto
     // guardarVenta() (venta nueva) como flushPendingVentas() (reintento de cola).
+    // Es reintentable: dbId / itemsOk marcan los pasos ya hechos para no duplicar filas.
     async function intentarGuardarVenta(venta) {
       setSync('syncing', 'Guardando venta…');
+      var items = venta.items || [];
 
-      var ventaRow = {
-        fecha: new Date().toISOString(),
-        total: parseFloat(venta.total) || 0,
-        pago: parseFloat(venta.pago) || 0,
-        vuelto: parseFloat(venta.vuelto) || 0
-      };
-
-      // 1. Guardar venta
-      var res = await sbPost('ventas', ventaRow);
-      var ventaId = res[0].id;
-      console.log('✓ Venta #' + venta.id + ' guardada en BD con ID:', ventaId);
-      // El id local (ventaNum++) es solo un contador de UI — a partir de acá el objeto
-      // pasa a usar el id real de la fila para que anularVenta() actualice/borre lo correcto.
-      venta.id = ventaId;
-      localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
-
-      // 2. Guardar items
-      for (var i = 0; i < (venta.items || []).length; i++) {
-        var item = venta.items[i];
-        await sbPost('items', {
-          venta_id: ventaId,
-          producto_id: item.id || null,
-          cantidad: parseInt(item.qty),
-          precio: parseFloat(item.price),
-          subtotal: parseFloat(item.price) * parseInt(item.qty)
-        });
+      // 1. Guardar venta (con la fecha real de la venta, aunque se sincronice más tarde)
+      if (!venta.dbId) {
+        var ventaRow = {
+          fecha: venta.fechaISO || new Date().toISOString(),
+          total: parseFloat(venta.total) || 0,
+          pago: parseFloat(venta.pago) || 0,
+          vuelto: parseFloat(venta.vuelto) || 0,
+          anulada: !!venta.anulada
+        };
+        if (metodoSoportado) ventaRow.metodo = venta.metodo || 'efectivo';
+        var res;
+        try {
+          res = await sbPost('ventas', ventaRow);
+        } catch (err) {
+          if (!ventaRow.metodo || !/metodo/.test(err.message)) throw err;
+          console.warn('La tabla ventas no tiene la columna "metodo" — correr la migración de supabase_schema.sql');
+          metodoSoportado = false;
+          delete ventaRow.metodo;
+          res = await sbPost('ventas', ventaRow);
+        }
+        venta.dbId = res[0].id;
+        console.log('✓ Venta guardada en BD con ID:', venta.dbId);
       }
-      console.log('✓ Items registrados (' + (venta.items || []).length + ' items)');
+
+      // 2. Guardar items — un solo insert, así no quedan ventas con detalle a medias
+      if (!venta.itemsOk && items.length) {
+        await sbPost('items', items.map(function (item) {
+          return {
+            venta_id: venta.dbId,
+            producto_id: item.id || null,
+            cantidad: parseInt(item.qty),
+            precio: parseFloat(item.price),
+            subtotal: parseFloat(item.price) * parseInt(item.qty)
+          };
+        }));
+        venta.itemsOk = true;
+      }
 
       // 3. Actualizar stock en BD
-      for (var j = 0; j < (venta.items || []).length; j++) {
-        var item = venta.items[j];
+      for (var j = 0; j < items.length; j++) {
+        var item = items[j];
         if (!item.id) continue;
-        var prod = productos.find(function (p) { return p.id === item.id; });
+        var prod = productos.find(function (p) { return String(p.id) === String(item.id); });
         if (!prod) continue;
         await sbUpdate('productos', item.id, { stock: prod.stock });
-        console.log('✓ Stock actualizado para', item.id, '- nuevo stock:', prod.stock);
       }
+
+      // 4. Si se anuló mientras estaba en cola, reflejarlo
+      if (venta.anulada) await sbUpdate('ventas', venta.dbId, { anulada: true });
+
+      // El id local (ventaNum++) es solo un contador de UI — a partir de acá la venta
+      // del historial pasa a usar el id real de la fila para que anularVenta() apunte bien.
+      venta.id = venta.dbId;
+      venta.pendiente = false;
+      var h = historial.find(function (x) { return mismaVenta(venta, x); });
+      if (h) { h.id = venta.dbId; h.dbId = venta.dbId; h.pendiente = false; }
+      localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
 
       console.log('✓✓✓ VENTA COMPLETAMENTE GUARDADA ✓✓✓');
       setSync('ok', 'Guardado ✓');
@@ -2998,37 +3032,49 @@
 
     // Cola de ventas que no llegaron a Supabase (sin conexión, error del servidor, etc).
     // Se guardan en localStorage para no perderlas si se cierra la pestaña.
+    function leerPendientes() { return JSON.parse(localStorage.getItem('rpos_pending_ventas') || '[]'); }
+
     function encolarVentaPendiente(venta) {
-      var pend = JSON.parse(localStorage.getItem('rpos_pending_ventas') || '[]');
-      if (!pend.some(function (v) { return v.id === venta.id; })) {
-        pend.push(venta);
-        localStorage.setItem('rpos_pending_ventas', JSON.stringify(pend));
-      }
+      var pend = leerPendientes();
+      var idx = pend.findIndex(function (v) { return mismaVenta(venta, v); });
+      if (idx >= 0) pend[idx] = venta; else pend.push(venta);
+      localStorage.setItem('rpos_pending_ventas', JSON.stringify(pend));
     }
 
+    var flushEnCurso = false;
     async function flushPendingVentas() {
-      var pend = JSON.parse(localStorage.getItem('rpos_pending_ventas') || '[]');
+      if (flushEnCurso) return;
+      var pend = leerPendientes();
       if (!pend.length) return;
-      var restantes = pend.slice();
-      for (var i = 0; i < pend.length; i++) {
-        try {
-          await intentarGuardarVenta(pend[i]);
-          restantes = restantes.filter(function (v) { return v.id !== pend[i].id; });
-          localStorage.setItem('rpos_pending_ventas', JSON.stringify(restantes));
-        } catch (err) {
-          break; // seguimos sin conexión — el resto queda en cola para el próximo intento
+      flushEnCurso = true;
+      var total = pend.length;
+      try {
+        while (pend.length) {
+          try {
+            await intentarGuardarVenta(pend[0]);
+            pend.shift();
+          } catch (err) {
+            console.error('Venta pendiente sin sincronizar:', err);
+            setSync('error', 'Sin conexión — en cola');
+            break; // seguimos sin conexión — el resto queda en cola para el próximo intento
+          } finally {
+            // guarda también el progreso parcial (dbId / itemsOk) de la que falló
+            localStorage.setItem('rpos_pending_ventas', JSON.stringify(pend));
+          }
         }
+      } finally {
+        flushEnCurso = false;
       }
-      if (restantes.length === 0 && pend.length > 0) {
+      if (pend.length === 0) {
         toast('Ventas pendientes sincronizadas ✓', 'ok');
-      } else if (restantes.length < pend.length) {
-        toast(restantes.length + ' venta(s) aún pendiente(s) de sincronizar', 'aviso');
+      } else if (pend.length < total) {
+        toast(pend.length + ' venta(s) aún pendiente(s) de sincronizar', 'aviso');
       }
+      if (document.getElementById('tab-historial').classList.contains('active')) renderHistorial();
     }
 
     async function guardarVenta(venta) {
       try {
-        console.log('📤 Iniciando guardado de venta #' + venta.id);
         await intentarGuardarVenta(venta);
       } catch (err) {
         console.error('✗ Error al guardar venta:', err);
@@ -3069,7 +3115,13 @@
               itemsPorVenta[it.venta_id].push({ id: it.producto_id, name: prod ? prod.nombre : '', qty: it.cantidad, price: parseFloat(it.precio) || 0 });
             });
             historial = ventasData.map(function (s) {
-              return { id: s.id, date: s.fecha, total: parseFloat(s.total) || 0, pago: parseFloat(s.pago) || 0, vuelto: parseFloat(s.vuelto) || 0, anulada: !!s.anulada, items: itemsPorVenta[s.id] || [] };
+              return { id: s.id, dbId: s.id, date: s.fecha, total: parseFloat(s.total) || 0, pago: parseFloat(s.pago) || 0, vuelto: parseFloat(s.vuelto) || 0, metodo: s.metodo || 'efectivo', anulada: !!s.anulada, items: itemsPorVenta[s.id] || [] };
+            });
+            // Las ventas que siguen en la cola offline todavía no están en la base — sin esto
+            // desaparecerían del historial y del cierre de caja hasta que se sincronicen.
+            leerPendientes().forEach(function (p) {
+              if (p.dbId && historial.some(function (h) { return h.dbId === p.dbId; })) return;
+              historial.unshift(p);
             });
             localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
           }
@@ -3106,20 +3158,20 @@
       if (sel) {
         var selected = sel.value;
         sel.innerHTML = '<option value="">Todas las categorías</option>' +
-          categorias.map(function (c) { return '<option value="' + c.nombre + '">' + c.nombre + '</option>'; }).join('');
+          categorias.map(function (c) { return '<option value="' + esc(c.nombre) + '">' + esc(c.nombre) + '</option>'; }).join('');
         sel.value = selected;
       }
       if (selForm) {
         var selected = selForm.value;
         selForm.innerHTML =
-          categorias.map(function (c) { return '<option value="' + c.nombre + '">' + c.nombre + '</option>'; }).join('');
+          categorias.map(function (c) { return '<option value="' + esc(c.nombre) + '">' + esc(c.nombre) + '</option>'; }).join('');
         selForm.value = selected;
       }
       var selAumento = document.getElementById('aumento-cat');
       if (selAumento) {
         var selectedAumento = selAumento.value;
         selAumento.innerHTML = '<option value="">Todas las categorías</option>' +
-          categorias.map(function (c) { return '<option value="' + c.nombre + '">' + c.nombre + '</option>'; }).join('');
+          categorias.map(function (c) { return '<option value="' + esc(c.nombre) + '">' + esc(c.nombre) + '</option>'; }).join('');
         selAumento.value = selectedAumento;
       }
       // Mostrar en admin
@@ -3128,7 +3180,7 @@
         lista.innerHTML = categorias.length > 0 ?
           categorias.map(function (c) {
             return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--border);font-size:13px;">' +
-              '<span>' + c.nombre + '</span>' +
+              '<span>' + esc(c.nombre) + '</span>' +
               '<button class="btn-d" data-id="' + c.id + '" onclick="eliminarCategoria(' + c.id + ')" style="padding:4px 8px;font-size:11px;">Eliminar</button>' +
               '</div>';
           }).join('')
@@ -3144,7 +3196,7 @@
       if (selForm) {
         var selected = selForm.value;
         selForm.innerHTML =
-          marcas.map(function (m) { return '<option value="' + m.nombre + '">' + m.nombre + '</option>'; }).join('');
+          marcas.map(function (m) { return '<option value="' + esc(m.nombre) + '">' + esc(m.nombre) + '</option>'; }).join('');
         selForm.value = selected;
       }
       // Mostrar en admin
@@ -3153,7 +3205,7 @@
         lista.innerHTML = marcas.length > 0 ?
           marcas.map(function (m) {
             return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--border);font-size:13px;">' +
-              '<span>' + m.nombre + '</span>' +
+              '<span>' + esc(m.nombre) + '</span>' +
               '<button class="btn-d" data-id="' + m.id + '" onclick="eliminarMarca(' + m.id + ')" style="padding:4px 8px;font-size:11px;">Eliminar</button>' +
               '</div>';
           }).join('')
@@ -3328,7 +3380,7 @@
       if (!res.length) { box.classList.add('hidden'); return; }
       box.classList.remove('hidden');
       box.innerHTML = res.map(function (p) {
-        return '<div class="sug-item" onclick="elegirSug(\'' + p.id + '\')"><div><div class="sug-nombre">' + p.nombre + '</div><div class="sug-info">' + p.categoria + (p.marca ? ' · ' + p.marca.split('|').join(', ') : '') + ' · Stock: ' + p.stock + (p.stockDeposito > 0 ? ' · Dep: ' + p.stockDeposito : '') + '</div></div><div class="sug-precio">$' + p.precio.toFixed(2) + '</div></div>';
+        return '<div class="sug-item" onclick="elegirSug(\'' + p.id + '\')"><div><div class="sug-nombre">' + esc(p.nombre) + '</div><div class="sug-info">' + esc(p.categoria) + (p.marca ? ' · ' + esc(p.marca.split('|').join(', ')) : '') + ' · Stock: ' + p.stock + (p.stockDeposito > 0 ? ' · Dep: ' + p.stockDeposito : '') + '</div></div><div class="sug-precio">$' + p.precio.toFixed(2) + '</div></div>';
       }).join('');
     }
     function elegirSug(id) {
@@ -3354,14 +3406,14 @@
       empty.style.display = 'none'; if (btnC) btnC.style.display = '';
       rows.innerHTML = carro.map(function (item, i) {
         return '<div class="cart-row">' +
-          '<div><div class="row-nombre">' + item.nombre + '</div><div class="row-meta">' + item.id + (item.codigo ? ' · ' + item.codigo : '') + ' · ' + item.categoria + (item.marca ? ' · ' + item.marca : '') + '</div></div>' +
+          '<div><div class="row-nombre">' + esc(item.nombre) + '</div><div class="row-meta">' + item.id + (item.codigo ? ' · ' + item.codigo : '') + ' · ' + esc(item.categoria) + (item.marca ? ' · ' + esc(item.marca) : '') + '</div></div>' +
           '<div class="qty-ctrl"><button class="qty-btn" aria-label="Restar cantidad" onclick="cambiarCant(' + i + ',-1)">−</button><span class="qty-num">' + item.qty + '</span><button class="qty-btn" aria-label="Sumar cantidad" onclick="cambiarCant(' + i + ',1)">+</button></div>' +
           '<div class="row-precio" title="Click para editar precio" onclick="editarPrecio(' + i + ', this)">$' + (item.precio * item.qty).toFixed(2) + '</div>' +
-          '<button class="btn-quitar" aria-label="Quitar ' + item.nombre + ' del carrito" onclick="quitarItem(' + i + ')">✕</button></div>';
+          '<button class="btn-quitar" aria-label="Quitar ' + esc(item.nombre) + ' del carrito" onclick="quitarItem(' + i + ')">✕</button></div>';
       }).join('');
       actualizarTotales();
     }
-    function cambiarCant(i, d) { var item = carro[i], prod = productos.find(function (p) { return p.id === item.id; }), nq = item.qty + d; if (nq <= 0) { quitarItem(i); return; } if (nq > prod.stock) { toast('Stock: ' + prod.stock, 'aviso'); return; } item.qty = nq; renderCarro(); }
+    function cambiarCant(i, d) { var item = carro[i], prod = productos.find(function (p) { return String(p.id) === String(item.id); }), nq = item.qty + d; if (nq <= 0) { quitarItem(i); return; } if (nq > prod.stock) { toast('Stock: ' + prod.stock, 'aviso'); return; } item.qty = nq; renderCarro(); }
     function quitarItem(i) { carro.splice(i, 1); renderCarro(); }
     function editarPrecio(i, el) {
       var item = carro[i];
@@ -3406,20 +3458,24 @@
     }
     function cobrar() {
       var total = carro.reduce(function (s, i) { return s + i.precio * i.qty; }, 0), pago = parseFloat(document.getElementById('pago-input').value) || 0;
-      if (pago < total) { toast('El pago es menor al total', 'mal'); return; }
-      carro.forEach(function (item) { var p = productos.find(function (x) { return x.id === item.id; }); if (p) p.stock -= item.qty; });
       var metodo = (document.getElementById('metodo-pago') || {}).value || 'efectivo';
-      var venta = { id: ventaNum++, date: new Date().toLocaleString('es-AR'), items: carro.map(function (i) { return { id: i.id, name: i.nombre, qty: i.qty, price: i.precio }; }), total: total, pago: pago, vuelto: pago - total, metodo: metodo };
+      // Con transferencia/tarjeta no hay efectivo que contar: si no se cargó monto, se cobra el total justo
+      if (metodo !== 'efectivo' && !pago) pago = total;
+      if (pago < total) { toast('El pago es menor al total', 'mal'); return; }
+      carro.forEach(function (item) { var p = productos.find(function (x) { return String(x.id) === String(item.id); }); if (p) p.stock -= item.qty; });
+      var ahora = new Date();
+      var venta = { id: ventaNum++, uid: 'v' + ahora.getTime() + '-' + Math.random().toString(36).slice(2, 8), pendiente: true, date: ahora.toLocaleString('es-AR'), fechaISO: ahora.toISOString(), items: carro.map(function (i) { return { id: i.id, name: i.nombre, qty: i.qty, price: i.precio }; }), total: total, pago: pago, vuelto: pago - total, metodo: metodo };
       localStorage.setItem('rpos_vnum', ventaNum);
       historial.unshift(venta); localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
       var itemsVendidos = carro.slice(); // guardar antes de vaciar
-      try { mostrarTicket(venta); } catch (err) { console.error('Error al mostrar ticket:', err); toast('Error al mostrar ticket. Revise la consola.', 'mal'); } guardarVenta(venta); programarSync();
+      try { mostrarTicket(venta); } catch (err) { console.error('Error al mostrar ticket:', err); toast('Error al mostrar ticket. Revise la consola.', 'mal'); } guardarVenta(venta);
       carro = []; renderCarro(); document.getElementById('pago-input').value = '';
       var mpEl = document.getElementById('metodo-pago'); if (mpEl) mpEl.value = 'efectivo';
       mostrarAlertaStock(itemsVendidos);
     }
 
     // ── TICKET ──
+    var METODO_LABEL = { efectivo: 'Efectivo', transferencia: 'Transferencia', debito: 'Débito', credito: 'Crédito' };
     function mostrarTicket(v) {
       if (!v) return;
 
@@ -3454,7 +3510,7 @@
           itemsHtml +=
             '<div style="margin-bottom:1.5mm;">' +
             '<div style="display:flex;justify-content:space-between;gap:1mm;">' +
-            '<span style="flex:1;word-break:break-word;font-weight:600;">' + nombreStr + '</span>' +
+            '<span style="flex:1;word-break:break-word;font-weight:600;">' + esc(nombreStr) + '</span>' +
             '<span style="flex:0 0 12mm;text-align:right;">' + parseInt(it.qty) + '</span>' +
             '<span style="flex:0 0 14mm;text-align:right;font-weight:700;">' + subtotalStr + '</span>' +
             '</div>';
@@ -3548,7 +3604,7 @@
         '<span style="font-weight:700;font-size:11px;">$' + parseFloat(total).toFixed(2) + '</span>' +
         '</div>' +
         '<div style="display:flex;justify-content:space-between;gap:2mm;margin-bottom:1.5mm;">' +
-        '<span>Pago Efectivo:</span>' +
+        '<span>Pago ' + (METODO_LABEL[v.metodo] || 'Efectivo') + ':</span>' +
         '<span>$' + parseFloat(pago).toFixed(2) + '</span>' +
         '</div>' +
         (vuelto > 0 ?
@@ -3606,7 +3662,7 @@
         var cls = ss ? 'sin-stock' : sb ? 'stock-bajo' : '', sc = ss ? 'rojo' : sb ? 'amarillo' : 'verde', dc = p.stockDeposito > 0 ? 'verde' : 'gris';
         var mg = p.costo > 0 ? ((p.precio - p.costo) / p.costo * 100).toFixed(0) + '%' : '-';
         return '<div class="prod-card ' + cls + '">' +
-          '<div class="pc-head"><div><div class="pc-nombre">' + p.nombre + '</div><div class="pc-codigo">' + p.id + (p.codigo ? ' · ' + p.codigo : '') + (p.marca ? ' · ' + p.marca.split('|').join(', ') : '') + '</div></div><div class="cat-badge">' + p.categoria + '</div></div>' +
+          '<div class="pc-head"><div><div class="pc-nombre">' + esc(p.nombre) + '</div><div class="pc-codigo">' + p.id + (p.codigo ? ' · ' + p.codigo : '') + (p.marca ? ' · ' + esc(p.marca.split('|').join(', ')) : '') + '</div></div><div class="cat-badge">' + esc(p.categoria) + '</div></div>' +
           '<div class="pc-stats">' +
           '<div class="stat"><div class="stat-lbl">Precio</div><div class="stat-v naranja">$' + p.precio.toFixed(2) + '</div></div>' +
           '<div class="stat"><div class="stat-lbl">Negocio</div><div class="stat-v ' + sc + '">' + p.stock + ' <span style="font-size:10px;color:var(--muted)">mín ' + p.minStock + '</span></div></div>' +
@@ -3761,7 +3817,7 @@
         var fm = fd ? fd.toLocaleString('es-AR') : v.date;
         var itemsResumen = '';
         if (v.items && v.items.length) {
-          itemsResumen = '<div class="hist-detalle">' + v.items.map(function (i) { return (i.qty) + 'x ' + (i.name || i.nombre || ''); }).join(' · ') + '</div>';
+          itemsResumen = '<div class="hist-detalle">' + v.items.map(function (i) { return (i.qty) + 'x ' + esc(i.name || i.nombre || ''); }).join(' · ') + '</div>';
         }
         var anulada = v.anulada ? 'anulada' : '';
         var badgeAnul = v.anulada ? '<span class="badge-anulada">ANULADA</span>' : '';
@@ -3883,7 +3939,7 @@
           top.map(function (e, i) {
             return '<div class="rep-prod-row">' +
               '<span style="color:var(--muted);font-family:var(--mono);font-size:11px;margin-right:8px;">#' + (i + 1) + '</span>' +
-              '<span style="flex:1">' + e[0] + '</span>' +
+              '<span style="flex:1">' + esc(e[0]) + '</span>' +
               '<span style="font-family:var(--mono);color:var(--accent)">' + e[1] + ' uds</span></div>';
           }).join('') + '</div>'
           : '<div style="text-align:center;padding:30px;color:var(--muted);font-family:var(--mono);font-size:12px;">Sin ventas en este periodo</div>');
@@ -3909,17 +3965,16 @@
         var f = parseFecha(v.date);
         return f && f.toDateString() === new Date().toDateString() && !v.anulada;
       });
-      var totalEsperado = ventasHoy.reduce(function (s, v) { return s + (parseFloat(v.total) || 0); }, 0);
+      // Totales por método — en caja solo debería haber lo cobrado en efectivo
+      var porMetodo = { efectivo: 0, transferencia: 0, debito: 0, credito: 0 };
+      ventasHoy.forEach(function (v) { var m = v.metodo || 'efectivo'; porMetodo[m] = (porMetodo[m] || 0) + (parseFloat(v.total) || 0); });
+      var totalEsperado = porMetodo.efectivo;
       document.getElementById('cierre-fecha').textContent = hoy;
       document.getElementById('cierre-cant').textContent = ventasHoy.length;
       document.getElementById('cierre-esperado').textContent = '$' + totalEsperado.toFixed(2);
       document.getElementById('cierre-real').value = '';
       document.getElementById('cierre-dif').textContent = '-';
       document.getElementById('cierre-dif').style.color = 'var(--muted)';
-      // Totales por método
-      var porMetodo = { efectivo: 0, transferencia: 0, debito: 0, credito: 0 };
-      ventasHoy.forEach(function (v) { var m = v.metodo || 'efectivo'; porMetodo[m] = (porMetodo[m] || 0) + (parseFloat(v.total) || 0); });
-
       var det = document.getElementById('cierre-detalle');
       if (!ventasHoy.length) {
         det.innerHTML = '<div style="text-align:center;color:var(--muted);font-family:var(--mono);font-size:11px;">Sin ventas hoy</div>';
@@ -3958,7 +4013,10 @@
       var realVal = document.getElementById('cierre-real').value;
       var real = realVal ? '$' + parseFloat(realVal).toFixed(2) : 'No ingresado';
       var dif = document.getElementById('cierre-dif').textContent;
-      var ventasHoy = historial.filter(function (v) { return (v.date || '').startsWith(hoy); });
+      var ventasHoy = historial.filter(function (v) {
+        var f = parseFecha(v.date);
+        return f && f.toDateString() === new Date().toDateString() && !v.anulada;
+      });
       var win = window.open('', '_blank', 'width=320,height=600');
       win.document.write(
         '<html><head><title>Cierre ' + hoy + '</title>' +
@@ -3972,7 +4030,7 @@
         '<div class="linea bold"><span>Diferencia</span><span>' + dif + '</span></div>' +
         '<div class="div"></div>' +
         '<div class="det">Detalle de ventas:</div>' +
-        ventasHoy.map(function (v) { return '<div class="linea det"><span>#' + String(v.id).padStart(4, '0') + ' ' + v.date + '</span><span>$' + parseFloat(v.total).toFixed(2) + '</span></div>'; }).join('') +
+        ventasHoy.map(function (v) { return '<div class="linea det"><span>#' + String(v.id).padStart(4, '0') + ' ' + fechaLegible(v.date) + ' · ' + (v.metodo || 'efectivo') + '</span><span>$' + parseFloat(v.total).toFixed(2) + '</span></div>'; }).join('') +
         '<div class="div"></div><div style="text-align:center;font-size:10px;color:#999;">RepuestoPOS</div>' +
         '</bo' + 'dy></html>'
       );
@@ -4013,7 +4071,7 @@
       var preview = afect.slice(0, 6).map(function (p) {
         var nuevo = calcNuevoPrecio(p.precio, tipo, valor);
         return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">' +
-          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + p.nombre + '</span>' +
+          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(p.nombre) + '</span>' +
           '<span style="font-family:var(--mono);margin-left:10px;white-space:nowrap;color:var(--muted)">$' + p.precio.toFixed(0) +
           ' <span style="color:var(--green)">→ $' + nuevo.toFixed(0) + '</span></span></div>';
       }).join('');
@@ -4033,7 +4091,9 @@
       });
       cerrarAumento();
       renderInv();
-      programarSync();
+      // Solo id + nombre (NOT NULL) + precio: el upsert no toca stock ni otras columnas
+      guardarProductosParciales(afect.map(function (p) { return { id: p.id, nombre: p.nombre, precio: p.precio }; }))
+        .catch(function () { toast('Error al guardar los precios nuevos', 'mal'); });
       toast('Aumento aplicado a ' + afect.length + ' productos', 'ok');
     }
     // PRESUPUESTO
@@ -4096,7 +4156,7 @@
       box.classList.remove('hidden');
       box.innerHTML = res.map(function (p) {
         return '<div class="sug-item" data-id="' + p.id + '" onclick="presElegirSug(this.dataset.id)">' +
-          '<div><div class="sug-nombre">' + p.nombre + '</div><div class="sug-info">' + p.categoria + (p.marca ? ' · ' + p.marca.split('|').join(', ') : '') + ' · Stock: ' + p.stock + '</div></div>' +
+          '<div><div class="sug-nombre">' + esc(p.nombre) + '</div><div class="sug-info">' + esc(p.categoria) + (p.marca ? ' · ' + esc(p.marca.split('|').join(', ')) : '') + ' · Stock: ' + p.stock + '</div></div>' +
           '<div class="sug-precio">$' + p.precio.toFixed(2) + '</div></div>';
       }).join('');
     }
@@ -4117,10 +4177,10 @@
       empty.style.display = 'none'; document.getElementById('pres-btn-generar').disabled = false;
       rows.innerHTML = presupuesto.map(function (item, i) {
         return '<div class="cart-row">' +
-          '<div><div class="row-nombre">' + item.nombre + '</div><div class="row-meta">' + item.id + ' · ' + item.categoria + (item.marca ? ' · ' + item.marca : '') + '</div></div>' +
+          '<div><div class="row-nombre">' + esc(item.nombre) + '</div><div class="row-meta">' + item.id + ' · ' + esc(item.categoria) + (item.marca ? ' · ' + esc(item.marca) : '') + '</div></div>' +
           '<div class="qty-ctrl"><button class="qty-btn" aria-label="Restar cantidad" onclick="presCambiarCant(' + i + ',-1)">−</button><span class="qty-num">' + item.qty + '</span><button class="qty-btn" aria-label="Sumar cantidad" onclick="presCambiarCant(' + i + ',1)">+</button></div>' +
           '<div class="row-precio">$' + (item.precio * item.qty).toFixed(2) + '</div>' +
-          '<button class="btn-quitar" aria-label="Quitar ' + item.nombre + ' del presupuesto" onclick="presQuitarItem(' + i + ')">✕</button></div>';
+          '<button class="btn-quitar" aria-label="Quitar ' + esc(item.nombre) + ' del presupuesto" onclick="presQuitarItem(' + i + ')">✕</button></div>';
       }).join('');
       presCalcTotal();
     }
@@ -4172,7 +4232,7 @@
         '<div class="t-div"></div>' +
         presupuesto.map(function (item) {
           return '<div class="lp">' +
-            '<div class="pn">' + item.nombre + '</div>' +
+            '<div class="pn">' + esc(item.nombre) + '</div>' +
             '<div class="t-linea" style="margin-top:3px;"><span style="color:#888;">' + item.qty + ' x $' + item.precio.toFixed(2) + '</span><span style="font-weight:600;">$' + (item.precio * item.qty).toFixed(2) + '</span></div>' +
             '</div>';
         }).join('') +
@@ -4203,24 +4263,39 @@
       if (v.anulada) { toast('Esta venta ya fue anulada', 'aviso'); return; }
       if (!confirm('Anular comprobante #' + String(v.id).padStart(4, '0') + ' por $' + parseFloat(v.total).toFixed(2) + '?')) return;
       // Devolver stock
+      var tocados = [];
       if (v.items && v.items.length) {
         v.items.forEach(function (item) {
+          // String(): los ids del historial vienen numéricos de Supabase y los de productos como texto
           var prod = item.id != null
-            ? productos.find(function (p) { return p.id === item.id; })
+            ? productos.find(function (p) { return String(p.id) === String(item.id); })
             : null;
           if (!prod) {
             var nombre = item.name || item.nombre || '';
             prod = productos.find(function (p) { return p.nombre === nombre; });
           }
-          if (prod) prod.stock += (parseInt(item.qty) || 0);
+          if (prod) { prod.stock += (parseInt(item.qty) || 0); if (tocados.indexOf(prod) < 0) tocados.push(prod); }
         });
       }
       v.anulada = true;
       localStorage.setItem('rpos_cache_hist', JSON.stringify(historial));
+      localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
       renderHistorial();
       renderInv();
-      programarSync();
-      sbUpdate('ventas', v.id, { anulada: true }).catch(function () { });
+      // Ventas cacheadas de antes de existir dbId: si no están en cola, su id ya es el de la base
+      var enCola = leerPendientes().some(function (p) { return mismaVenta(v, p); });
+      var idBD = v.dbId || (!v.pendiente && !enCola ? v.id : null);
+      if (!idBD) {
+        // Todavía en la cola offline: su id es el contador local, NO el de la base — un PATCH
+        // por ese id anularía otra venta. Se marca en la cola y se anula al sincronizar.
+        var pend = leerPendientes();
+        pend.forEach(function (p) { if (mismaVenta(v, p)) p.anulada = true; });
+        localStorage.setItem('rpos_pending_ventas', JSON.stringify(pend));
+      } else {
+        sbUpdate('ventas', idBD, { anulada: true }).catch(function (e) { console.error('Error al anular en BD:', e); toast('No se pudo anular en la base — revisá la conexión', 'mal'); });
+      }
+      Promise.all(tocados.map(function (p) { return sbUpdate('productos', p.id, { stock: p.stock }); }))
+        .catch(function (e) { console.error('Error al devolver stock en BD:', e); setSync('error', 'Error al guardar stock'); });
       toast('Venta #' + String(v.id).padStart(4, '0') + ' anulada — stock devuelto', 'aviso');
     }
 
@@ -4229,7 +4304,7 @@
       var bajos = [];
 
       productosVendidos.forEach(function (item) {
-        var p = productos.find(function (x) { return x.id === item.id; });
+        var p = productos.find(function (x) { return String(x.id) === String(item.id); });
         if (!p) return;
 
         if (p.stock <= 0) {
@@ -4252,7 +4327,7 @@
           var label = b.tipo === 'sin-stock'
             ? '<span class="alerta-stock-num" style="color:var(--danger)">SIN STOCK</span>'
             : '<span class="alerta-stock-num">' + b.stock + ' ud' + (b.stock !== 1 ? 's' : '') + ' <span style="font-size:11px;color:var(--muted)">(mín ' + b.min + ')</span></span>';
-          return '<div class="alerta-modal-item"><span style="flex:1;margin-right:10px;">' + b.nombre + '</span>' + label + '</div>';
+          return '<div class="alerta-modal-item"><span style="flex:1;margin-right:10px;">' + esc(b.nombre) + '</span>' + label + '</div>';
         }).join('');
 
       modal.style.display = 'block';
@@ -4284,7 +4359,7 @@
         itemsHtml = v.items.map(function (i) {
           var nombre = i.name || i.nombre || '';
           return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">' +
-            '<span><span style="font-family:var(--mono);color:var(--accent);margin-right:8px;">' + i.qty + '×</span>' + nombre + '</span>' +
+            '<span><span style="font-family:var(--mono);color:var(--accent);margin-right:8px;">' + i.qty + '×</span>' + esc(nombre) + '</span>' +
             '<span style="font-family:var(--mono);">$' + (i.qty * (i.price || i.precio || 0)).toFixed(2) + '</span></div>';
         }).join('');
       } else {
@@ -4412,7 +4487,7 @@
       }
       container.innerHTML = marcasSeleccionadas.map(function (m) {
         return '<span class="marca-tag">' + m +
-          '<button class="marca-tag-x" data-m="' + m + '" onclick="marcaQuitar(this.dataset.m)">×</button>' +
+          '<button class="marca-tag-x" data-m="' + esc(m) + '" onclick="marcaQuitar(this.dataset.m)">×</button>' +
           '</span>';
       }).join('');
       document.getElementById('f-marca').value = marcasSeleccionadas.join('|');
@@ -4484,4 +4559,4 @@
   </script>
 </body>
 
-</html>
+</html>

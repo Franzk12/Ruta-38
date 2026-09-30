@@ -7,8 +7,8 @@
 -- Cómo usarlo:
 --   1. Crear un proyecto nuevo en supabase.com
 --   2. Project Settings → API → copiar "Project URL" y la "anon public" key
---   3. Pegar esos dos valores en index.html, líneas ~3095-3096
---      (SUPABASE_URL y SUPABASE_KEY)
+--   3. Pegar esos dos valores en index.html, en las variables
+--      SUPABASE_URL y SUPABASE_KEY (buscarlas con Ctrl+F)
 --   4. Correr este archivo completo en el SQL Editor del proyecto
 --   5. Abrir index.html, entrar con el PIN, y en la consola (F12) pegar
 --      el contenido de cargar_datos.js para precargar categorías y marcas
@@ -40,9 +40,16 @@ create table public.ventas (
   total      numeric(12,2) not null default 0,
   pago       numeric(12,2) not null default 0,
   vuelto     numeric(12,2) not null default 0,
+  metodo     text not null default 'efectivo',  -- efectivo | transferencia | debito | credito
   anulada    boolean not null default false
 );
 create index ventas_fecha_idx on public.ventas (fecha desc);
+
+-- MIGRACIÓN — si la base ya estaba creada con una versión anterior de este
+-- archivo, correr solo esta línea en el SQL Editor (no borra datos):
+--   alter table public.ventas add column if not exists metodo text not null default 'efectivo';
+-- Mientras no se corra, la app sigue guardando ventas pero sin el método de pago
+-- (el cierre de caja las cuenta todas como efectivo al recargar).
 
 -- ── ITEMS (detalle de cada venta) ──
 create table public.items (
