@@ -3,7 +3,7 @@
 Sistema de punto de venta para repuestos de autos. Es una aplicación de una sola página (`index.html`), sin instalación ni build: se abre directo en el navegador.
 
 ## Cómo usar
-Abrir `index.html` en el navegador (Chrome o Edge recomendado). Al entrar pide un PIN de acceso.
+Abrir `index.html` en el navegador (Chrome o Edge recomendado). La primera vez en cada PC pide el **email y la contraseña del local** (la sesión queda guardada) y después el **PIN** de bloqueo.
 
 ## Funciones
 - **Caja / Ventas** — escaneo de código de barras, carrito, cobro y emisión de ticket (impresora POS 80mm)
@@ -20,4 +20,15 @@ Los datos viven en **Supabase** (backend en la nube, tablas `productos`, `ventas
 `cargar_datos.js` es un script de un solo uso para precargar el catálogo inicial de categorías y marcas — se pega en la consola del navegador (F12), no forma parte de la app.
 
 ## Acceso
-La app pide un PIN antes de mostrar cualquier pantalla (ver `APP_PIN` en el `<script>` de `index.html` para cambiarlo). Es un freno básico contra el acceso casual, **no reemplaza la seguridad real**: esa depende de las políticas RLS (Row Level Security) configuradas en el proyecto de Supabase, ya que la `anon key` queda visible en el código fuente del navegador.
+- **Login (email + contraseña del local):** es lo que protege los datos. Sin sesión, la base no deja leer ni escribir nada, aunque alguien tenga la `anon key` que queda visible en el código. La sesión se renueva sola; se cierra desde **Admin → Cerrar sesión**.
+- **PIN** (`APP_PIN` en el `<script>` de `index.html`): solo bloquea la pantalla cuando te alejás de la caja (botón 🔒), sin cerrar la sesión.
+
+## Stock entre varias cajas
+Las ventas, anulaciones y movimientos depósito → negocio se hacen con funciones de la base (`registrar_venta`, `anular_venta`, `mover_stock`) que suman o restan **en Supabase**. Dos cajas que venden el mismo producto al mismo tiempo no se pisan, y una venta reintentada desde la cola offline no se duplica.
+
+## Puesta en marcha / actualización de la base
+1. **Base nueva:** correr `supabase_schema.sql` completo en el SQL Editor de Supabase.
+   **Base que ya existe:** correr `supabase_migracion.sql` (no borra datos, se puede correr más de una vez).
+2. Authentication → Users → **Add user**: crear el email y la contraseña del local (marcar *Auto Confirm User*).
+3. Authentication → Sign In / Providers → **desactivar "Allow new users to sign up"**. Si queda activado, cualquiera con la `anon key` podría crearse una cuenta propia.
+4. Abrir `index.html` e ingresar con ese email y contraseña.
