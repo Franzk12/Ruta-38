@@ -8,6 +8,9 @@ Abrir `index.html` en el navegador (Chrome o Edge recomendado). La primera vez e
 ## Funciones
 - **Caja / Ventas** — escaneo de código de barras, carrito, cobro y emisión de ticket (impresora POS 80mm)
 - **Inventario** — alta/baja/edición de productos, transferencia depósito ↔ negocio, aumento masivo de precios
+  - **⚡ Carga rápida:** escanear códigos para sumar stock o crear productos nuevos con un formulario corto (sin mouse)
+  - **📥 Importar:** carga masiva desde Excel, CSV o una tabla pegada (PDF, mail, WhatsApp), con vista previa antes de guardar y plantilla descargable
+  - **⧉ Similar:** crear un producto nuevo copiando otro
 - **Historial** — ventas por lista o agrupadas por día, anulación con devolución de stock
 - **Reportes** — métricas por día/semana/mes, gráfico de ventas y ranking de productos
 - **Presupuesto** — cotizador para clientes con descuento, no descuenta stock

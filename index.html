@@ -1741,6 +1741,24 @@
     }
 
     /* Fin estilos */
+    /* ── Carga rápida e importador ── */
+    .modal-ancho { width: 900px; }
+    .cr-log { margin-top: 12px; max-height: 240px; overflow-y: auto; border-top: 1px solid var(--border); }
+    .cr-log-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .cr-log-row .cr-cant { font-family: var(--mono); color: var(--green); min-width: 48px; }
+    .cr-log-row .cr-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .cr-log-row.deshecho { opacity: .45; text-decoration: line-through; }
+    .cr-nuevo { background: var(--bg); border: 1px solid var(--accent); border-radius: 8px; padding: 14px; margin: 6px 0 10px; }
+    .imp-tabla { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .imp-tabla th { text-align: left; font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; padding: 6px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+    .imp-tabla td { padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .imp-estado { font-family: var(--mono); font-size: 10px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+    .imp-nuevo { background: rgba(34,197,94,.15); color: var(--green); }
+    .imp-actualiza { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .imp-igual { background: var(--surface2); color: var(--muted); }
+    .imp-error { background: rgba(239,68,68,.15); color: var(--danger); }
+    .imp-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px 12px; }
+    .imp-paso { font-family: var(--mono); font-size: 11px; color: var(--accent); text-transform: uppercase; margin: 14px 0 8px; }
   </style>
 </head>
 
@@ -2161,6 +2179,9 @@
           </optgroup>
         </select>
         <button class="btn-nuevo" onclick="abrirModal()">+ Nuevo producto</button>
+        <button class="btn-nuevo" onclick="abrirCargaRapida()" title="Cargar o sumar stock escaneando códigos de barras">⚡ Carga rápida</button>
+        <button class="btn-nuevo" onclick="abrirImportar()"
+          style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);" title="Importar productos desde Excel, CSV o texto pegado">📥 Importar</button>
         <button class="btn-nuevo" onclick="abrirAumento()"
           style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);">📈 Aumento
           masivo</button>
@@ -2729,6 +2750,101 @@
   </div>
 
   <!-- MODAL MOVER STOCK -->
+  <!-- CARGA RÁPIDA CON ESCÁNER -->
+  <div class="overlay hidden" id="modal-carga">
+    <div class="modal" style="width:640px;">
+      <div class="modal-h">⚡ Carga rápida con escáner</div>
+      <div class="field-row" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="field"><label>Sumar a</label>
+          <select id="cr-destino" onchange="crGuardarPrefs()"><option value="negocio">Negocio</option><option value="deposito">Depósito</option></select></div>
+        <div class="field"><label>Cantidad por escaneo</label><input id="cr-cant" type="number" min="1" value="1"></div>
+        <div class="field"><label>% ganancia (nuevos)</label><input id="cr-margen" type="number" min="0" step="0.1" placeholder="Ej: 40" oninput="crGuardarPrefs();crCalcPrecio()"></div>
+      </div>
+      <div class="field"><label>Escaneá el código de barras (o escribilo y Enter)</label>
+        <input id="cr-scan" autocomplete="off" placeholder="Escanear…" style="font-size:16px;"></div>
+
+      <div id="cr-nuevo" class="cr-nuevo" style="display:none;">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:10px;">Producto nuevo <span id="cr-n-codigo-lbl" style="color:var(--muted);"></span></div>
+        <div class="field"><label>Nombre</label><input id="cr-n-nombre" autocomplete="off" placeholder="Ej: Filtro de aceite Fram PH5949"></div>
+        <div class="field-row">
+          <div class="field"><label>Categoría</label><select id="cr-n-cat"></select></div>
+          <div class="field"><label>Cantidad</label><input id="cr-n-cant" type="number" min="0"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Costo</label><input id="cr-n-costo" type="number" min="0" step="0.01" oninput="crCalcPrecio()"></div>
+          <div class="field"><label>Precio de venta</label><input id="cr-n-precio" type="number" min="0" step="0.01" oninput="crPrecioManual=true"></div>
+        </div>
+        <div class="modal-btns" style="margin-top:6px;">
+          <button class="btn-cancel" onclick="crCancelarNuevo()">Cancelar (Esc)</button>
+          <button class="btn-guardar" id="cr-n-guardar" onclick="crGuardarNuevo()">Guardar (Enter)</button>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <button class="rbtn" onclick="crSinCodigo()">+ Producto sin código de barras</button>
+        <span id="cr-resumen" style="font-family:var(--mono);font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div class="cr-log" id="cr-log"></div>
+      <div class="modal-btns"><button class="btn-cancel" onclick="cerrarCargaRapida()">Cerrar</button></div>
+    </div>
+  </div>
+
+  <!-- IMPORTAR PRODUCTOS -->
+  <div class="overlay hidden" id="modal-importar">
+    <div class="modal modal-ancho">
+      <div class="modal-h">📥 Importar productos</div>
+
+      <div id="imp-paso1">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
+          Subí un Excel o CSV, o pegá una tabla copiada de un PDF, mail o WhatsApp. En el paso siguiente elegís qué columna es cada dato y ves todo antes de guardar.
+          <a href="#" onclick="descargarPlantilla();return false;" style="color:var(--accent);">Descargar plantilla Excel</a>
+        </div>
+        <div class="field"><label>Archivo (.xlsx, .xls, .csv)</label><input id="imp-archivo" type="file" accept=".xlsx,.xls,.csv,.txt"></div>
+        <div class="field"><label>… o pegá los datos acá</label>
+          <textarea id="imp-texto" rows="8" placeholder="Código	Nombre	Costo&#10;7791234567890	Filtro de aceite PH5949	8500"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:9px;border-radius:5px;box-sizing:border-box;"></textarea></div>
+        <div class="modal-btns">
+          <button class="btn-cancel" onclick="cerrarImportar()">Cancelar</button>
+          <button class="btn-guardar" onclick="impLeer()">Leer datos →</button>
+        </div>
+      </div>
+
+      <div id="imp-paso2" style="display:none;">
+        <div class="imp-paso">1 · ¿Qué columna es cada dato?</div>
+        <label style="font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+          <input type="checkbox" id="imp-encabezado" onchange="impEvaluar()"> La primera fila son títulos (no es un producto)</label>
+        <div class="imp-map" id="imp-map"></div>
+
+        <div class="imp-paso">2 · Opciones</div>
+        <div class="field-row" style="grid-template-columns:1.4fr 1fr 1.2fr;">
+          <div class="field"><label>Productos que ya existen</label>
+            <select id="imp-accion" onchange="impEvaluar()">
+              <option value="precios">Actualizar costo y precio</option>
+              <option value="stock">Sumar stock (llegó mercadería)</option>
+              <option value="ambos">Actualizar precios y sumar stock</option>
+              <option value="nada">No tocarlos</option>
+            </select></div>
+          <div class="field"><label>% ganancia (si falta precio)</label><input id="imp-margen" type="number" min="0" step="0.1" placeholder="Ej: 40" oninput="impEvaluar()"></div>
+          <div class="field"><label>Categoría si falta</label><select id="imp-cat" onchange="impEvaluar()"></select></div>
+        </div>
+        <label style="font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;">
+          <input type="checkbox" id="imp-crear-cats" checked onchange="impEvaluar()"> Crear las categorías que no existan</label>
+
+        <div class="imp-paso">3 · Vista previa <span id="imp-conteo" style="color:var(--muted);text-transform:none;"></span></div>
+        <div style="max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:6px;" id="imp-preview"></div>
+        <div class="modal-btns">
+          <button class="btn-cancel" onclick="impVolver()">← Volver</button>
+          <button class="btn-guardar" id="imp-btn" onclick="impEjecutar()">Importar</button>
+        </div>
+      </div>
+
+      <div id="imp-paso3" style="display:none;">
+        <div id="imp-resultado" style="font-size:14px;line-height:1.8;"></div>
+        <div class="modal-btns"><button class="btn-guardar" onclick="cerrarImportar()">Listo</button></div>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay hidden" id="modal-mover">
     <div class="modal" style="width:340px;">
       <div class="modal-h">📦 Mover al negocio</div>
@@ -3724,6 +3840,7 @@
           '</div>' +
           '<div class="pc-actions">' + (p.stockDeposito > 0 ? '<button class="btn-e" style="background:rgba(34,197,94,.08);color:var(--green);border-color:rgba(34,197,94,.3);" data-id="' + p.id + '" onclick="abrirMover(this.dataset.id)">⬆ Mover</button>' : '') +
           '<button class="btn-e" data-id="' + p.id + '" onclick="abrirModal(this.dataset.id)">✏ Editar</button>' +
+          '<button class="btn-e" data-id="' + p.id + '" onclick="abrirSimilar(this.dataset.id)" title="Crear un producto nuevo copiando este">⧉ Similar</button>' +
           '<button class="btn-d" data-id="' + p.id + '" onclick="eliminarProducto(this.dataset.id)">🗑 Eliminar</button></div></div>';
       }).join('');
     }
@@ -4634,6 +4751,608 @@
     } else {
       setTimeout(function () { document.getElementById('lock-pin').focus(); }, 50);
     }
+
+    // ── PRODUCTO SIMILAR ──
+    // Abre el formulario de producto nuevo con los datos de otro (variantes: mismo repuesto
+    // para otro modelo, otra medida…). Código y stock quedan vacíos.
+    function abrirSimilar(id) {
+      abrirModal(id);
+      var p = productos.find(function (x) { return String(x.id) === String(id); });
+      if (!p) return;
+      editandoId = null;
+      stockAlAbrir = null;
+      document.getElementById('modal-h').textContent = '+ Nuevo producto (similar a ' + p.nombre + ')';
+      document.getElementById('f-id-display').textContent = 'Se genera al guardar';
+      ['f-codigo', 'f-stock', 'f-stockdep'].forEach(function (x) { document.getElementById(x).value = ''; });
+      actualizarTotal();
+    }
+
+    // ── ESTILO COMÚN ──
+    function opcionesCategorias(seleccion, conVacio) {
+      return (conVacio ? '<option value="">' + esc(conVacio) + '</option>' : '') +
+        categorias.map(function (c) {
+          return '<option value="' + esc(c.nombre) + '"' + (c.nombre === seleccion ? ' selected' : '') + '>' + esc(c.nombre) + '</option>';
+        }).join('');
+    }
+    function precioConMargen(costo, margen) {
+      return Math.round(costo * (1 + margen / 100)); // precios de venta en pesos enteros
+    }
+    function errorStock(e) {
+      console.error(e);
+      if (e && e.sinSesion) return;
+      toast(/ajustar_stock/.test((e && e.message) || '')
+        ? 'Falta actualizar la base: correr supabase_migracion.sql en Supabase'
+        : 'No se pudo guardar (¿sin conexión?)', 'mal');
+    }
+    function prefLeer(k, def) { try { var v = localStorage.getItem(k); return v === null ? def : v; } catch (e) { return def; } }
+    function prefGuardar(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+
+    // ── CARGA RÁPIDA CON ESCÁNER ──
+    // Escanear un código: si el producto existe suma stock (en la base, sin pisar ventas);
+    // si no existe, abre un formulario corto para crearlo. Pensado para usar sin mouse.
+    var crLog = [];            // operaciones de esta sesión (para ver y deshacer)
+    var crCodigoNuevo = null;  // código del producto que se está creando
+    var crPrecioManual = false;
+    var crOcupado = false;
+
+    function abrirCargaRapida() {
+      document.getElementById('cr-destino').value = prefLeer('rpos_cr_destino', 'negocio');
+      document.getElementById('cr-margen').value = prefLeer('rpos_cr_margen', '');
+      document.getElementById('cr-cant').value = 1;
+      crCancelarNuevo();
+      crRenderLog();
+      document.getElementById('modal-carga').classList.remove('hidden');
+      setTimeout(function () { document.getElementById('cr-scan').focus(); }, 80);
+    }
+    function cerrarCargaRapida() { document.getElementById('modal-carga').classList.add('hidden'); renderInv(); }
+    function crGuardarPrefs() {
+      prefGuardar('rpos_cr_destino', document.getElementById('cr-destino').value);
+      prefGuardar('rpos_cr_margen', document.getElementById('cr-margen').value);
+    }
+    function crCantidad() { return Math.max(1, parseInt(document.getElementById('cr-cant').value) || 1); }
+    function crDeposito() { return document.getElementById('cr-destino').value === 'deposito'; }
+
+    async function crEscanear() {
+      var inp = document.getElementById('cr-scan');
+      var code = inp.value.trim();
+      if (!code || crOcupado) return;
+      inp.value = '';
+      var p = productos.find(function (x) { return x.codigo && String(x.codigo) === code; });
+      crOcupado = true;
+      try {
+        if (!p) {
+          // Puede haberlo creado otra PC y esta todavía no lo tiene en su copia local
+          var r = await sbGet('productos', 'activos=eq.true&codigo=eq.' + encodeURIComponent(code));
+          if (r && r[0]) { p = norm(r[0]); productos.push(p); }
+        }
+        if (p) await crSumar(p, crCantidad());
+        else crMostrarNuevo(code);
+      } catch (e) {
+        errorStock(e);
+      } finally {
+        crOcupado = false;
+        if (document.getElementById('cr-nuevo').style.display === 'none') inp.focus();
+      }
+    }
+
+    async function crSumar(p, cant) {
+      var dep = crDeposito();
+      var mov = { id: Number(p.id), negocio: dep ? 0 : cant, deposito: dep ? cant : 0 };
+      aplicarStocks(await sbRpc('ajustar_stock', { p_items: [mov] }));
+      crLog.unshift({ id: p.id, nombre: p.nombre, negocio: mov.negocio, deposito: mov.deposito });
+      crRenderLog();
+      toast('+' + cant + ' ' + p.nombre + (dep ? ' (depósito)' : ''), 'ok');
+    }
+
+    function crMostrarNuevo(code) {
+      crCodigoNuevo = code || null;
+      crPrecioManual = false;
+      document.getElementById('cr-n-codigo-lbl').textContent = code ? '· código ' + code : '· sin código de barras';
+      document.getElementById('cr-n-nombre').value = '';
+      document.getElementById('cr-n-costo').value = '';
+      document.getElementById('cr-n-precio').value = '';
+      document.getElementById('cr-n-cant').value = crCantidad();
+      document.getElementById('cr-n-cat').innerHTML = opcionesCategorias(prefLeer('rpos_cr_cat', ''), '— Elegí una categoría —');
+      document.getElementById('cr-nuevo').style.display = '';
+      setTimeout(function () { document.getElementById('cr-n-nombre').focus(); }, 30);
+    }
+    function crSinCodigo() { crMostrarNuevo(null); }
+    function crCancelarNuevo() {
+      crCodigoNuevo = null;
+      document.getElementById('cr-nuevo').style.display = 'none';
+      document.getElementById('cr-scan').focus();
+    }
+    function crCalcPrecio() {
+      if (crPrecioManual) return;
+      var costo = parseFloat(document.getElementById('cr-n-costo').value);
+      var margen = parseFloat(document.getElementById('cr-margen').value);
+      document.getElementById('cr-n-precio').value = !isNaN(costo) && !isNaN(margen) ? precioConMargen(costo, margen) : '';
+    }
+
+    async function crGuardarNuevo() {
+      var nombre = document.getElementById('cr-n-nombre').value.trim();
+      var categoria = document.getElementById('cr-n-cat').value;
+      var costo = parseFloat(document.getElementById('cr-n-costo').value);
+      var precio = parseFloat(document.getElementById('cr-n-precio').value);
+      var cant = parseInt(document.getElementById('cr-n-cant').value);
+      if (!nombre) { toast('Falta el nombre', 'mal'); document.getElementById('cr-n-nombre').focus(); return; }
+      if (!categoria) { toast('Elegí una categoría', 'mal'); document.getElementById('cr-n-cat').focus(); return; }
+      if (isNaN(precio) || precio < 0) { toast('Falta el precio (o costo + % ganancia)', 'mal'); document.getElementById('cr-n-precio').focus(); return; }
+      if (isNaN(costo) || costo < 0) costo = 0;
+      if (isNaN(cant) || cant < 0) cant = 0;
+      if (crCodigoNuevo && productos.some(function (x) { return String(x.codigo) === crCodigoNuevo; })) {
+        toast('Ese código ya existe', 'mal'); return;
+      }
+      var dep = crDeposito();
+      var btn = document.getElementById('cr-n-guardar');
+      btn.disabled = true;
+      try {
+        var res = await sbPost('productos', {
+          codigo: crCodigoNuevo, nombre: nombre, categoria: categoria, marca: null,
+          precio: precio, costo: costo, stock: dep ? 0 : cant, stockDeposito: dep ? cant : 0, minStock: 0, activos: true
+        });
+        var p = norm(res[0]);
+        productos.push(p);
+        localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+        prefGuardar('rpos_cr_cat', categoria);
+        crLog.unshift({ id: p.id, nombre: p.nombre, negocio: dep ? 0 : cant, deposito: dep ? cant : 0, nuevo: true });
+        crRenderLog();
+        toast('Producto creado ✓ ' + nombre, 'ok');
+        crCancelarNuevo();
+      } catch (e) {
+        console.error(e);
+        toast('No se pudo crear el producto (¿sin conexión?)', 'mal');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function crDeshacer(i) {
+      var op = crLog[i];
+      if (!op || op.deshecho) return;
+      try {
+        if (op.nuevo) {
+          // Producto recién creado: se da de baja (baja lógica, como Eliminar)
+          await sbUpdate('productos', op.id, { activos: false });
+          productos = productos.filter(function (x) { return String(x.id) !== String(op.id); });
+          localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+        } else {
+          aplicarStocks(await sbRpc('ajustar_stock', { p_items: [{ id: Number(op.id), negocio: -op.negocio, deposito: -op.deposito }] }));
+        }
+        op.deshecho = true;
+        crRenderLog();
+        toast('Deshecho: ' + op.nombre, 'aviso');
+      } catch (e) { errorStock(e); }
+      document.getElementById('cr-scan').focus();
+    }
+
+    function crRenderLog() {
+      var el = document.getElementById('cr-log');
+      var vivos = crLog.filter(function (o) { return !o.deshecho; });
+      var unidades = vivos.reduce(function (s, o) { return s + o.negocio + o.deposito; }, 0);
+      document.getElementById('cr-resumen').textContent = vivos.length
+        ? vivos.length + ' operación(es) · ' + unidades + ' unidades · ' + vivos.filter(function (o) { return o.nuevo; }).length + ' producto(s) nuevo(s)'
+        : '';
+      if (!crLog.length) { el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:16px;">Todavía no escaneaste nada.</div>'; return; }
+      el.innerHTML = crLog.map(function (o, i) {
+        var p = productos.find(function (x) { return String(x.id) === String(o.id); });
+        var cant = o.negocio + o.deposito;
+        return '<div class="cr-log-row' + (o.deshecho ? ' deshecho' : '') + '">' +
+          '<span class="cr-cant">+' + cant + '</span>' +
+          '<span style="flex:1;">' + esc(o.nombre) + (o.nuevo ? ' <span class="imp-estado imp-nuevo">NUEVO</span>' : '') +
+          '<div class="cr-meta">' + (o.deposito ? 'depósito' : 'negocio') + (p ? ' · ahora: negocio ' + p.stock + ' / depósito ' + p.stockDeposito : '') + '</div></span>' +
+          (o.deshecho ? '' : '<button class="btn-d" style="padding:4px 8px;font-size:11px;" onclick="crDeshacer(' + i + ')">Deshacer</button>') +
+          '</div>';
+      }).join('');
+    }
+
+    document.getElementById('cr-scan').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); crEscanear(); }
+    });
+    // En el formulario de producto nuevo: Enter guarda, Esc cancela solo el formulario
+    ['cr-n-nombre', 'cr-n-cat', 'cr-n-cant', 'cr-n-costo', 'cr-n-precio'].forEach(function (id) {
+      document.getElementById(id).addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); crGuardarNuevo(); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); crCancelarNuevo(); }
+      });
+    });
+
+    // ── IMPORTAR PRODUCTOS ──
+    // Lee Excel/CSV/texto pegado, deja elegir qué columna es cada dato, muestra una vista
+    // previa (nuevo / actualiza / error) y recién ahí guarda.
+    var IMP_CAMPOS = [
+      { k: 'codigo', lbl: 'Código de barras', sin: ['codigo', 'cod', 'codigodebarras', 'codbarras', 'ean', 'barcode', 'sku', 'codigoproveedor', 'codproveedor', 'ref', 'referencia', 'nro', 'art'] },
+      { k: 'nombre', lbl: 'Nombre / descripción', sin: ['nombre', 'descripcion', 'desc', 'detalle', 'producto', 'articulo', 'item'] },
+      { k: 'categoria', lbl: 'Categoría', sin: ['categoria', 'rubro', 'familia', 'linea', 'grupo', 'tipo'] },
+      { k: 'marca', lbl: 'Marca / modelos', sin: ['marca', 'modelo', 'modelos', 'aplicacion', 'vehiculo', 'compatibilidad'] },
+      { k: 'costo', lbl: 'Costo', sin: ['costo', 'preciocosto', 'pcosto', 'preciolista', 'lista', 'neto', 'preciocompra', 'compra', 'preciounitario', 'unitario', 'pu'] },
+      { k: 'precio', lbl: 'Precio de venta', sin: ['precio', 'precioventa', 'pventa', 'venta', 'pvp', 'publico', 'preciopublico'] },
+      { k: 'stock', lbl: 'Stock negocio / cantidad', sin: ['stock', 'stocknegocio', 'cantidad', 'cant', 'unidades', 'existencia', 'qty'] },
+      { k: 'stockDeposito', lbl: 'Stock depósito', sin: ['deposito', 'stockdeposito'] },
+      { k: 'minStock', lbl: 'Stock mínimo', sin: ['minimo', 'stockminimo', 'min'] }
+    ];
+    var impFilas = [];     // datos crudos: array de filas (arrays de celdas)
+    var impRes = [];       // resultado de la evaluación, una entrada por fila
+
+    function abrirImportar() {
+      document.getElementById('imp-archivo').value = '';
+      document.getElementById('imp-texto').value = '';
+      impMostrarPaso(1);
+      document.getElementById('modal-importar').classList.remove('hidden');
+    }
+    function cerrarImportar() { document.getElementById('modal-importar').classList.add('hidden'); }
+    function impMostrarPaso(n) {
+      [1, 2, 3].forEach(function (i) { document.getElementById('imp-paso' + i).style.display = i === n ? '' : 'none'; });
+    }
+    function impVolver() { impMostrarPaso(1); }
+
+    // SheetJS (lector de Excel) se carga recién cuando hace falta
+    function cargarXLSX() {
+      if (window.XLSX) return Promise.resolve(window.XLSX);
+      return new Promise(function (ok, mal) {
+        var sc = document.createElement('script');
+        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        sc.onload = function () { ok(window.XLSX); };
+        sc.onerror = function () { sc.remove(); mal(new Error('No se pudo cargar el lector de Excel (¿sin internet?)')); };
+        document.head.appendChild(sc);
+      });
+    }
+
+    function normTxt(t) {
+      return String(t == null ? '' : t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+    }
+
+    // Números en formato argentino o internacional: "1.234,56", "$ 1.234", "1234.5", 8500
+    function parseNum(v) {
+      if (typeof v === 'number') return v;
+      var t = String(v == null ? '' : v).replace(/[$\s ]/g, '').replace(/^ARS/i, '');
+      if (!t) return null;
+      var neg = /^-/.test(t) || /^\(.*\)$/.test(t);
+      t = t.replace(/[()\-+]/g, '');
+      var c = t.lastIndexOf(','), d = t.lastIndexOf('.');
+      if (c >= 0 && d >= 0) {
+        t = c > d ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+      } else if (c >= 0) {
+        t = /^\d{1,3}(,\d{3})+$/.test(t) && !/,\d{1,2}$/.test(t) ? t.replace(/,/g, '') : t.replace(/,/g, '.');
+      } else if (d >= 0 && /^\d{1,3}(\.\d{3})+$/.test(t)) {
+        t = t.replace(/\./g, ''); // 1.234 o 12.500 = miles
+      }
+      if (!/^\d*\.?\d+$/.test(t)) return NaN;
+      var n = parseFloat(t);
+      return neg ? -n : n;
+    }
+
+    // Texto pegado o CSV → filas. Detecta tabulador (copiado de Excel/PDF), ; o ,
+    // y, si no hay ninguno, columnas separadas por 2+ espacios.
+    function impParseTexto(txt) {
+      var lineas = txt.replace(/\r\n?/g, '\n').split('\n').filter(function (l) { return l.trim(); });
+      if (!lineas.length) return [];
+      var muestra = lineas.slice(0, 20);
+      function enTodas(re) { return muestra.every(function (l) { return re.test(l); }); }
+      // Orden: tabulador (Excel), ";" (CSV de Excel en español), 2+ espacios (copiado de PDF)
+      // y recién después ",", porque en precios argentinos la coma es decimal ("95.300,00")
+      var delim = muestra.some(function (l) { return l.indexOf('\t') >= 0; }) ? '\t'
+        : enTodas(/;/) ? ';'
+        : enTodas(/\S\s{2,}\S/) ? null
+        : enTodas(/,/) ? ',' : null;
+      return lineas.map(function (l) {
+        if (!delim) return l.trim().split(/\s{2,}/);
+        var celdas = [], cur = '', q = false;
+        for (var i = 0; i < l.length; i++) {
+          var ch = l[i];
+          if (q) {
+            if (ch === '"' && l[i + 1] === '"') { cur += '"'; i++; }
+            else if (ch === '"') q = false;
+            else cur += ch;
+          } else if (ch === '"' && !cur.trim()) q = true;
+          else if (ch === delim) { celdas.push(cur.trim()); cur = ''; }
+          else cur += ch;
+        }
+        celdas.push(cur.trim());
+        return celdas;
+      });
+    }
+
+    function leerArchivoTexto(f) {
+      return f.arrayBuffer().then(function (buf) {
+        var t = new TextDecoder('utf-8').decode(buf);
+        // Los CSV que guarda Excel en Windows suelen venir en Latin-1: se nota por los "�"
+        if (t.indexOf('�') >= 0) t = new TextDecoder('windows-1252').decode(buf);
+        return t;
+      });
+    }
+
+    async function impLeer() {
+      var archivo = document.getElementById('imp-archivo').files[0];
+      var texto = document.getElementById('imp-texto').value;
+      try {
+        if (archivo) {
+          if (/\.(xlsx|xls)$/i.test(archivo.name)) {
+            var X = await cargarXLSX();
+            var wb = X.read(await archivo.arrayBuffer(), { type: 'array' });
+            impFilas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+          } else {
+            impFilas = impParseTexto(await leerArchivoTexto(archivo));
+          }
+        } else if (texto.trim()) {
+          impFilas = impParseTexto(texto);
+        } else {
+          toast('Elegí un archivo o pegá los datos', 'mal'); return;
+        }
+      } catch (e) {
+        console.error(e); toast(e.message || 'No se pudo leer el archivo', 'mal'); return;
+      }
+      impFilas = impFilas.filter(function (f) { return f.some(function (c) { return String(c).trim() !== ''; }); });
+      if (!impFilas.length) { toast('No se encontraron datos', 'mal'); return; }
+      impArmarMapeo();
+      impMostrarPaso(2);
+      impEvaluar();
+    }
+
+    // Adivina qué columna es cada campo por los títulos (si los hay) y arma los selectores
+    function impArmarMapeo() {
+      var ncol = impFilas.reduce(function (m, f) { return Math.max(m, f.length); }, 0);
+      var titulos = impFilas[0].map(normTxt);
+      var usadas = {}, asignado = {};
+      [true, false].forEach(function (exacto) {
+        IMP_CAMPOS.forEach(function (c) {
+          if (asignado[c.k] != null) return;
+          for (var i = 0; i < ncol; i++) {
+            if (usadas[i] || !titulos[i]) continue;
+            // 1ª pasada: título exacto; 2ª: el título contiene el sinónimo ("P. Lista" → lista),
+            // solo con sinónimos largos para que "min" o "cod" no aparezcan en cualquier lado
+            var ok = c.sin.some(function (s) { return exacto ? titulos[i] === s : s.length >= 4 && titulos[i].indexOf(s) >= 0; });
+            if (ok) { asignado[c.k] = i; usadas[i] = true; break; }
+          }
+        });
+      });
+      var hayTitulos = Object.keys(asignado).length > 0 && !impFilas[0].some(function (c) { return typeof c === 'number' || /^\d{6,}$/.test(String(c).trim()); });
+      document.getElementById('imp-encabezado').checked = hayTitulos;
+      if (!hayTitulos) {
+        // Sin títulos (típico al pegar desde un PDF): se deducen código y nombre por el contenido
+        asignado = {};
+        var datos = impFilas.slice(0, 50);
+        for (var ci = 0; ci < ncol; ci++) {
+          var conCodigo = datos.filter(function (f) { return /^\d{6,14}$/.test(String(f[ci] == null ? '' : f[ci]).trim()); }).length;
+          if (conCodigo >= datos.length * 0.6) { asignado.codigo = ci; break; }
+        }
+        var mejor = -1, largo = 0;
+        for (var ni = 0; ni < ncol; ni++) {
+          if (ni === asignado.codigo) continue;
+          var l = datos.reduce(function (s, f) { var v = f[ni]; return s + (typeof v === 'string' && isNaN(parseNum(v)) ? v.length : 0); }, 0);
+          if (l > largo) { largo = l; mejor = ni; }
+        }
+        if (mejor >= 0) asignado.nombre = mejor;
+      }
+      var ej = function (i) {
+        var f = impFilas[hayTitulos ? 1 : 0] || [];
+        var v = String(f[i] == null ? '' : f[i]);
+        return v.length > 18 ? v.slice(0, 18) + '…' : v;
+      };
+      var opciones = function (sel) {
+        var o = '<option value="-1">— no está —</option>';
+        for (var i = 0; i < ncol; i++) {
+          var nom = hayTitulos ? String(impFilas[0][i] || '') : '';
+          o += '<option value="' + i + '"' + (sel === i ? ' selected' : '') + '>Col ' + (i + 1) + (nom ? ': ' + esc(nom) : '') + (ej(i) ? ' (ej: ' + esc(ej(i)) + ')' : '') + '</option>';
+        }
+        return o;
+      };
+      document.getElementById('imp-map').innerHTML = IMP_CAMPOS.map(function (c) {
+        return '<div class="field" style="margin:0;"><label>' + c.lbl + '</label><select id="imp-col-' + c.k + '" onchange="impEvaluar()">' + opciones(asignado[c.k]) + '</select></div>';
+      }).join('');
+      document.getElementById('imp-cat').innerHTML = opcionesCategorias('', '— marcar como error —');
+    }
+
+    function impEvaluar() {
+      var col = {};
+      IMP_CAMPOS.forEach(function (c) { col[c.k] = parseInt(document.getElementById('imp-col-' + c.k).value); });
+      var accion = document.getElementById('imp-accion').value;
+      var margen = parseFloat(document.getElementById('imp-margen').value);
+      var catDef = document.getElementById('imp-cat').value;
+      var crearCats = document.getElementById('imp-crear-cats').checked;
+      var desde = document.getElementById('imp-encabezado').checked ? 1 : 0;
+      var catsExist = {};
+      categorias.forEach(function (c) { catsExist[c.nombre.toLowerCase()] = c.nombre; });
+      var vistos = {};
+
+      impRes = impFilas.slice(desde).map(function (f, idx) {
+        var celda = function (k) { return col[k] >= 0 ? f[col[k]] : ''; };
+        var txt = function (k) { var v = celda(k); return String(v == null ? '' : v).trim(); };
+        var r = { fila: idx + desde + 1, errores: [], cambios: [] };
+        r.codigo = txt('codigo').replace(/\.0+$/, '') || null;
+        r.nombre = txt('nombre');
+        r.marca = txt('marca') || null;
+        var cat = txt('categoria') || catDef;
+        r.categoria = cat ? (catsExist[cat.toLowerCase()] || cat) : '';
+        r.catNueva = !!cat && !catsExist[cat.toLowerCase()];
+        ['costo', 'precio', 'stock', 'stockDeposito', 'minStock'].forEach(function (k) {
+          var v = celda(k);
+          if (v === '' || v == null) { r[k] = null; return; }
+          var n = parseNum(v);
+          if (n === null) { r[k] = null; return; }
+          if (isNaN(n)) { r.errores.push(k + ' no es un número ("' + v + '")'); r[k] = null; return; }
+          if (n < 0) { r.errores.push(k + ' negativo'); r[k] = null; return; }
+          r[k] = k === 'costo' || k === 'precio' ? Math.round(n * 100) / 100 : Math.round(n);
+        });
+        if (r.precio == null && r.costo != null && !isNaN(margen)) { r.precio = precioConMargen(r.costo, margen); r.precioCalc = true; }
+
+        if (r.codigo) {
+          if (vistos[r.codigo]) r.errores.push('código repetido en la fila ' + vistos[r.codigo]);
+          else vistos[r.codigo] = r.fila;
+        }
+        // ¿Ya existe? Por código; si la fila no tiene código, por nombre exacto
+        r.prod = r.codigo
+          ? productos.find(function (p) { return p.codigo && String(p.codigo) === r.codigo; })
+          : (r.nombre ? productos.find(function (p) { return !p.codigo && normTxt(p.nombre) === normTxt(r.nombre); }) : null);
+
+        if (r.errores.length) { r.estado = 'error'; return r; }
+        if (r.prod) {
+          var p = r.prod;
+          if ((accion === 'precios' || accion === 'ambos')) {
+            if (r.costo != null && r.costo !== p.costo) r.cambios.push('costo $' + p.costo + ' → $' + r.costo);
+            if (r.precio != null && r.precio !== p.precio) r.cambios.push('precio $' + p.precio + ' → $' + r.precio);
+          }
+          if ((accion === 'stock' || accion === 'ambos')) {
+            if (r.stock) r.cambios.push('+' + r.stock + ' negocio');
+            if (r.stockDeposito) r.cambios.push('+' + r.stockDeposito + ' depósito');
+          }
+          r.estado = r.cambios.length ? 'actualiza' : 'igual';
+          return r;
+        }
+        if (!r.nombre) r.errores.push('falta el nombre');
+        if (!r.categoria) r.errores.push('falta la categoría');
+        else if (r.catNueva && !crearCats) r.errores.push('la categoría "' + r.categoria + '" no existe');
+        if (r.precio == null) r.errores.push('falta el precio (o costo + % ganancia)');
+        r.estado = r.errores.length ? 'error' : 'nuevo';
+        return r;
+      });
+
+      var n = { nuevo: 0, actualiza: 0, igual: 0, error: 0 };
+      impRes.forEach(function (r) { n[r.estado]++; });
+      document.getElementById('imp-conteo').textContent = '— ' + n.nuevo + ' nuevos · ' + n.actualiza + ' a actualizar · ' + n.igual + ' sin cambios · ' + n.error + ' con error';
+      var btn = document.getElementById('imp-btn');
+      btn.disabled = !(n.nuevo + n.actualiza);
+      btn.textContent = n.nuevo + n.actualiza ? 'Importar (' + (n.nuevo + n.actualiza) + ')' : 'Nada para importar';
+
+      var ETQ = { nuevo: 'NUEVO', actualiza: 'ACTUALIZA', igual: 'SIN CAMBIOS', error: 'ERROR' };
+      var MAX = 300;
+      var orden = impRes.slice().sort(function (a, b) {
+        var pr = { error: 0, nuevo: 1, actualiza: 2, igual: 3 };
+        return pr[a.estado] - pr[b.estado] || a.fila - b.fila;
+      });
+      var fmt = function (v, pre) { return v == null ? '<span style="color:var(--muted)">—</span>' : (pre || '') + v; };
+      document.getElementById('imp-preview').innerHTML = '<table class="imp-tabla"><thead><tr>' +
+        '<th>Fila</th><th>Estado</th><th>Código</th><th>Nombre</th><th>Categoría</th><th>Costo</th><th>Precio</th><th>Stock</th><th>Detalle</th></tr></thead><tbody>' +
+        orden.slice(0, MAX).map(function (r) {
+          var det = r.estado === 'error' ? r.errores.join('; ')
+            : r.estado === 'actualiza' ? r.cambios.join(' · ')
+            : r.estado === 'igual' ? 'ya existe' + (accion === 'nada' ? '' : ', nada que cambiar')
+            : (r.catNueva ? 'categoría nueva · ' : '') + (r.precioCalc ? 'precio calculado con ' + margen + '%' : '');
+          return '<tr><td>' + r.fila + '</td><td><span class="imp-estado imp-' + r.estado + '">' + ETQ[r.estado] + '</span></td>' +
+            '<td style="font-family:var(--mono);">' + fmt(r.codigo && esc(r.codigo)) + '</td><td>' + esc(r.prod ? r.prod.nombre : r.nombre) + '</td><td>' + esc(r.categoria) + '</td>' +
+            '<td>' + fmt(r.costo, '$') + '</td><td>' + fmt(r.precio, '$') + '</td><td>' + fmt(r.stock) + (r.stockDeposito ? ' + ' + r.stockDeposito + ' dep.' : '') + '</td>' +
+            '<td style="font-size:11px;color:' + (r.estado === 'error' ? 'var(--danger)' : 'var(--muted)') + ';">' + esc(det) + '</td></tr>';
+        }).join('') + '</tbody></table>' +
+        (orden.length > MAX ? '<div style="padding:8px;font-size:11px;color:var(--muted);text-align:center;">Mostrando ' + MAX + ' de ' + orden.length + ' filas (se importan todas).</div>' : '');
+    }
+
+    function enLotes(arr, n) { var out = []; for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; }
+
+    async function impEjecutar() {
+      var accion = document.getElementById('imp-accion').value;
+      var nuevos = impRes.filter(function (r) { return r.estado === 'nuevo'; });
+      var actualiza = impRes.filter(function (r) { return r.estado === 'actualiza'; });
+      if (!confirm('Se van a crear ' + nuevos.length + ' productos y actualizar ' + actualiza.length + '. ¿Continuar?')) return;
+      var btn = document.getElementById('imp-btn');
+      btn.disabled = true;
+      var hecho = { creados: 0, precios: 0, stock: 0 }, fallas = [];
+      var paso = function (t) { btn.textContent = t; };
+      try {
+        // 1. Categorías que faltan
+        var cats = {};
+        nuevos.forEach(function (r) { if (r.catNueva) cats[r.categoria.toLowerCase()] = r.categoria; });
+        var catsNuevas = Object.keys(cats).map(function (k) { return cats[k]; });
+        if (catsNuevas.length) {
+          paso('Creando categorías…');
+          await sbPost('categorias', catsNuevas.map(function (c) { return { nombre: c, activa: true }; }));
+          cargarCategorias();
+        }
+        // 2. Productos nuevos
+        var lotes = enLotes(nuevos, 200);
+        for (var i = 0; i < lotes.length; i++) {
+          paso('Creando productos… ' + (i * 200) + '/' + nuevos.length);
+          try {
+            var res = await sbPost('productos', lotes[i].map(function (r) {
+              return { codigo: r.codigo, nombre: r.nombre, categoria: r.categoria, marca: r.marca, precio: r.precio, costo: r.costo || 0,
+                stock: r.stock || 0, stockDeposito: r.stockDeposito || 0, minStock: r.minStock || 0, activos: true };
+            }));
+            res.forEach(function (row) { productos.push(norm(row)); });
+            hecho.creados += res.length;
+          } catch (e) { console.error(e); fallas.push('No se pudieron crear ' + lotes[i].length + ' productos (filas ' + lotes[i][0].fila + '–' + lotes[i][lotes[i].length - 1].fila + ')'); }
+        }
+        // 3. Precios de los que ya existen (solo las columnas que cambian; el upsert no toca el stock)
+        if (accion === 'precios' || accion === 'ambos') {
+          var grupos = {};
+          actualiza.forEach(function (r) {
+            var fila = { id: Number(r.prod.id), nombre: r.prod.nombre };
+            if (r.costo != null && r.costo !== r.prod.costo) fila.costo = r.costo;
+            if (r.precio != null && r.precio !== r.prod.precio) fila.precio = r.precio;
+            var clave = Object.keys(fila).join(',');
+            if (clave === 'id,nombre') return;
+            (grupos[clave] = grupos[clave] || []).push({ fila: fila, r: r });
+          });
+          var gl = Object.keys(grupos);
+          for (var g = 0; g < gl.length; g++) {
+            var partes = enLotes(grupos[gl[g]], 300);
+            for (var j = 0; j < partes.length; j++) {
+              paso('Actualizando precios…');
+              try {
+                await sbUpsert('productos', partes[j].map(function (x) { return x.fila; }));
+                partes[j].forEach(function (x) {
+                  if (x.fila.costo != null) x.r.prod.costo = x.fila.costo;
+                  if (x.fila.precio != null) x.r.prod.precio = x.fila.precio;
+                });
+                hecho.precios += partes[j].length;
+              } catch (e) { console.error(e); fallas.push('No se pudieron actualizar los precios de ' + partes[j].length + ' productos'); }
+            }
+          }
+        }
+        // 4. Stock de los que ya existen: se suma en la base
+        if (accion === 'stock' || accion === 'ambos') {
+          var movs = actualiza.filter(function (r) { return r.stock || r.stockDeposito; }).map(function (r) {
+            return { id: Number(r.prod.id), negocio: r.stock || 0, deposito: r.stockDeposito || 0 };
+          });
+          var ml = enLotes(movs, 500);
+          for (var m = 0; m < ml.length; m++) {
+            paso('Sumando stock…');
+            try {
+              aplicarStocks(await sbRpc('ajustar_stock', { p_items: ml[m] }));
+              hecho.stock += ml[m].length;
+            } catch (e) { errorStock(e); fallas.push('No se pudo sumar el stock de ' + ml[m].length + ' productos'); }
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        fallas.push(e.message || 'Error inesperado');
+      }
+      localStorage.setItem('rpos_cache_prod', JSON.stringify(productos));
+      renderInv();
+      var errores = impRes.filter(function (r) { return r.estado === 'error'; }).length;
+      document.getElementById('imp-resultado').innerHTML =
+        '<div style="font-size:16px;font-weight:600;margin-bottom:8px;">' + (fallas.length ? '⚠️ Importación con problemas' : '✅ Importación terminada') + '</div>' +
+        '<div>🟢 Productos creados: <b>' + hecho.creados + '</b></div>' +
+        '<div>🔵 Precios actualizados: <b>' + hecho.precios + '</b></div>' +
+        '<div>📦 Productos con stock sumado: <b>' + hecho.stock + '</b></div>' +
+        (errores ? '<div style="color:var(--muted);">Filas con error (no se importaron): ' + errores + '</div>' : '') +
+        fallas.map(function (f) { return '<div style="color:var(--danger);">' + esc(f) + '</div>'; }).join('');
+      impMostrarPaso(3);
+      btn.disabled = false;
+    }
+
+    // Plantilla para que el cliente o un proveedor completen
+    var PLANTILLA = [
+      ['Código', 'Nombre', 'Categoría', 'Marca/Modelos', 'Costo', 'Precio', 'Stock negocio', 'Stock depósito', 'Stock mínimo'],
+      ['7791234567890', 'Filtro de aceite Fram PH5949', 'Filtros de Aceite', 'Toyota - Corolla|Toyota - Hilux', 8500, 12900, 4, 10, 2],
+      ['', 'Juego de pastillas de freno delanteras', 'Pastillas de Freno', 'Volkswagen - Gol', 15000, '', 2, 0, 1]
+    ];
+    async function descargarPlantilla() {
+      try {
+        var X = await cargarXLSX();
+        var wb = X.utils.book_new();
+        var ws = X.utils.aoa_to_sheet(PLANTILLA);
+        ws['!cols'] = [18, 40, 22, 30, 10, 10, 12, 14, 12].map(function (w) { return { wch: w }; });
+        X.utils.book_append_sheet(wb, ws, 'Productos');
+        X.writeFile(wb, 'plantilla_productos_ruta38.xlsx');
+      } catch (e) {
+        // Sin internet para el lector de Excel: se baja como CSV (también abre en Excel)
+        var csv = PLANTILLA.map(function (f) { return f.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+        a.download = 'plantilla_productos_ruta38.csv';
+        a.click();
+      }
+    }
+
 
     // ── LOGIN ──
     function mostrarLogin(msg) {

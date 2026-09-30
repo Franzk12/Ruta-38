@@ -228,11 +228,40 @@ begin
 end;
 $$;
 
+-- Suma (o resta, con números negativos) stock en lote: carga rápida con escáner,
+-- importación de mercadería y "deshacer". Suma sobre el valor de la base, así no
+-- pisa ventas hechas mientras tanto. p_items: [{id, negocio, deposito}, ...]
+create or replace function public.ajustar_stock(p_items jsonb)
+returns jsonb language plpgsql security invoker set search_path = public as $$
+declare
+  r jsonb;
+begin
+  with x as (
+    select (e->>'id')::bigint as id,
+           sum(coalesce((e->>'negocio')::integer, 0))  as neg,
+           sum(coalesce((e->>'deposito')::integer, 0)) as dep
+    from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) as e
+    group by 1
+  ), u as (
+    update public.productos p
+       set stock = p.stock + x.neg, "stockDeposito" = p."stockDeposito" + x.dep
+      from x
+     where p.id = x.id
+    returning p.id, p.stock, p."stockDeposito"
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('id', id, 'stock', stock, 'stockDeposito', "stockDeposito")), '[]'::jsonb)
+    into r from u;
+  return r;
+end;
+$$;
+
 revoke all on function public.stocks_de_venta(bigint)       from public, anon;
 revoke all on function public.anular_venta(bigint)          from public, anon;
 revoke all on function public.registrar_venta(jsonb, jsonb) from public, anon;
 revoke all on function public.mover_stock(bigint, integer)  from public, anon;
+revoke all on function public.ajustar_stock(jsonb)           from public, anon;
 grant execute on function public.stocks_de_venta(bigint)       to authenticated;
 grant execute on function public.anular_venta(bigint)          to authenticated;
 grant execute on function public.registrar_venta(jsonb, jsonb) to authenticated;
 grant execute on function public.mover_stock(bigint, integer)  to authenticated;
+grant execute on function public.ajustar_stock(jsonb)           to authenticated;
