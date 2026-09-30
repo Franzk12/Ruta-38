@@ -3693,8 +3693,12 @@
     // ── MODAL ──
     function generarId() { var m = productos.reduce(function (x, p) { var n = parseInt((p.id || '').replace('REP-', '')) || 0; return n > x ? n : x; }, 0); return 'REP-' + String(m + 1).padStart(6, '0'); }
     function actualizarTotal() { var n = parseInt(document.getElementById('f-stock').value) || 0, d = parseInt(document.getElementById('f-stockdep').value) || 0, el = document.getElementById('f-total'); if (el) el.textContent = n + d; }
+    // Stock que tenía el formulario al abrirlo — si no se toca, al guardar no se manda
+    // (ver guardarProducto), así una venta hecha en otra caja mientras tanto no se pisa.
+    var stockAlAbrir = null;
     function abrirModal(id) {
       editandoId = id || null;
+      stockAlAbrir = null;
       document.getElementById('modal-h').textContent = id ? '✏ Editar producto' : '+ Nuevo producto';
       if (id) {
         var p = productos.find(function (x) { return String(x.id) === String(id); });
@@ -3705,6 +3709,7 @@
         document.getElementById('f-precio').value = p.precio; document.getElementById('f-costo').value = p.costo || '';
         document.getElementById('f-stock').value = p.stock; document.getElementById('f-stockdep').value = p.stockDeposito || 0;
         document.getElementById('f-minstock').value = p.minStock || '';
+        stockAlAbrir = { stock: document.getElementById('f-stock').value, dep: document.getElementById('f-stockdep').value };
       } else {
         document.getElementById('f-id-display').textContent = 'Se genera al guardar';
         ['f-codigo', 'f-nombre', 'f-precio', 'f-costo', 'f-stock', 'f-stockdep', 'f-minstock'].forEach(function (x) { document.getElementById(x).value = ''; });
@@ -3762,11 +3767,19 @@
 
       try {
         if (editandoId) {
-          // Editar producto existente
-          await sbUpdate('productos', editandoId, producto);
+          // Editar producto existente. El stock solo se manda si lo cambiaste a mano (un
+          // conteo nuevo): si no, se deja el de la base, que puede haber bajado por ventas
+          // de otra caja desde que abriste el formulario.
+          var cambios = [];
+          if (stockAlAbrir && document.getElementById('f-stock').value === stockAlAbrir.stock) delete producto.stock;
+          else cambios.push('negocio');
+          if (stockAlAbrir && document.getElementById('f-stockdep').value === stockAlAbrir.dep) delete producto.stockDeposito;
+          else cambios.push('depósito');
+          var res = await sbEscribir('/rest/v1/productos?id=eq.' + encodeURIComponent(editandoId), 'PATCH', producto, 'return=representation');
           var idx = productos.findIndex(function (p) { return String(p.id) === String(editandoId); });
-          if (idx >= 0) productos[idx] = Object.assign({}, productos[idx], producto);
-          toast('Producto actualizado ✓', 'ok');
+          // La base devuelve la fila guardada, con el stock real del momento
+          if (idx >= 0) productos[idx] = res && res[0] ? norm(res[0]) : Object.assign({}, productos[idx], producto);
+          toast('Producto actualizado ✓' + (cambios.length ? ' (stock ' + cambios.join(' y ') + ' fijado a mano)' : ''), 'ok');
         } else {
           // Crear nuevo producto
           const res = await sbPost('productos', producto);
@@ -3778,7 +3791,8 @@
         }
       } catch (e) {
         console.error('ERROR:', e);
-        toast('Error al guardar producto', 'mal');
+        toast('Error al guardar producto — revisá la conexión', 'mal');
+        return; // el formulario queda abierto para no perder lo cargado
       }
 
       cerrarModal();
