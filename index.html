@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
+  <script>try { if (localStorage.getItem('rpos_tema') === 'oscuro') document.documentElement.setAttribute('data-tema', 'oscuro'); } catch (e) { }</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ruta 38 Repuestos</title>
   <link rel="icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIA">
@@ -59,11 +60,36 @@
       }
     }
 
+    /* Tema claro (por defecto). El oscuro se activa desde Admin → Apariencia. */
     :root {
+      color-scheme: light;
+      --bg: #f5f4f1;
+      --surface: #ffffff;
+      --surface2: #efede9;
+      --border: #e2dfd9;
+      --hover-border: #c9c4bb;
+      --accent: #ea580c;
+      --accent2: #c2410c;
+      --accent-soft: rgba(234, 88, 12, .10);
+      --green: #16884a;
+      --danger: #d4351f;
+      --warn: #a86b00;
+      --text: #1d1b18;
+      --text-2: #4b4740;
+      --muted: #7a7469;
+      --overlay: rgba(40, 34, 28, .40);
+      --sombra: 0 10px 30px rgba(40, 34, 28, .16);
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
+    }
+
+    html[data-tema="oscuro"] {
+      color-scheme: dark;
       --bg: #131211;
       --surface: #1c1b19;
       --surface2: #262422;
       --border: #33302c;
+      --hover-border: #4a4640;
       --accent: #f97316;
       --accent2: #ea6210;
       --accent-soft: rgba(249, 115, 22, .14);
@@ -73,8 +99,8 @@
       --text: #f3f0ea;
       --text-2: #cbc5ba;
       --muted: #938c81;
-      --mono: 'IBM Plex Mono', monospace;
-      --sans: 'IBM Plex Sans', sans-serif;
+      --overlay: rgba(0, 0, 0, .72);
+      --sombra: 0 12px 32px rgba(0, 0, 0, .5);
     }
 
     * {
@@ -1870,7 +1896,7 @@
     /* ── Etapa 2: componentes comunes ── */
     .btn-nuevo, .btn-sec { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; padding: 9px 14px; border-radius: 9px; white-space: nowrap; }
     .btn-sec { background: var(--surface2); color: var(--text-2); border: 1px solid var(--border); font-family: var(--sans); font-weight: 500; cursor: pointer; }
-    .btn-sec:hover { color: var(--text); border-color: #4a4640; }
+    .btn-sec:hover { color: var(--text); border-color: var(--hover-border); }
     .btn-sec.peligro:hover { color: var(--danger); border-color: var(--danger); }
     .btn-icono { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; flex-shrink: 0; }
     .btn-icono:hover { background: var(--surface2); color: var(--text); }
@@ -1910,7 +1936,7 @@
     .inv-toolbar { background: var(--bg); padding: 14px 20px; gap: 10px; }
     .inv-grid { padding: 18px 20px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
     .prod-card { border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-    .prod-card:hover { border-color: #4a4640; }
+    .prod-card:hover { border-color: var(--hover-border); }
     .prod-card.sin-stock { border-color: rgba(239, 90, 74, .4); }
     .prod-card.stock-bajo { border-color: rgba(242, 201, 76, .35); }
     .pc-head { margin: 0; align-items: flex-start; }
@@ -2041,6 +2067,27 @@
       .sync-pill { white-space: nowrap; max-width: 52vw; overflow: hidden; text-overflow: ellipsis; }
       .inv-tabla .acc { width: 40px; }
     }
+
+    /* ── Tema claro / oscuro ── */
+    .overlay { background: var(--overlay); }
+    .toast, .menu-flot, .sugerencias { box-shadow: var(--sombra); }
+    .alerta-modal { box-shadow: var(--sombra); }
+    .topbar { background: var(--surface); }
+    .pos-right { background: var(--surface); }
+    .prod-card.stock-bajo { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+    .prod-card.sin-stock { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+    .alerta-stock { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+    .chip.peligro, .imp-error { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+    .imp-nuevo { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+    .imp-actualiza { background: rgba(59, 130, 246, .14); color: #2563eb; }
+    html[data-tema="oscuro"] .imp-actualiza { color: #60a5fa; }
+    .cart-empty-icon { opacity: .35; }
+    .btn-cobrar:disabled { color: var(--muted); }
+    .sync-pill { border-color: var(--border); }
+    .ticket-overlay { background: var(--overlay); }
+    .btn-imprimir { background: var(--text); color: var(--surface); }
+    .btn-cerrar-t { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .tema-sel .rbtn { padding: 7px 14px; }
   </style>
 </head>
 
@@ -2567,6 +2614,18 @@
           </div>
           <div id="marca-lista" style="max-height:400px;overflow-y:auto;">
             <div style="color:var(--muted);text-align:center;padding:20px;font-size:12px;">Cargando...</div>
+          </div>
+        </div>
+
+        <!-- APARIENCIA -->
+        <div class="rep-card" style="grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div class="admin-tit" style="margin-bottom:4px;"><span class="ic" data-i="sun"></span>Apariencia</div>
+            <div style="font-size:13px;color:var(--muted);">Se guarda en esta PC.</div>
+          </div>
+          <div class="seg tema-sel">
+            <button class="rbtn" data-tema="claro" onclick="setTema('claro')"><span class="ic" data-i="sun"></span>Claro</button>
+            <button class="rbtn" data-tema="oscuro" onclick="setTema('oscuro')"><span class="ic" data-i="moon"></span>Oscuro</button>
           </div>
         </div>
 
@@ -3248,6 +3307,8 @@
       "info": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/>",
       "arrow-left": "<path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/>",
       "arrow-right": "<path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/>",
+      "sun": "<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2\"/><path d=\"M12 20v2\"/><path d=\"m4.93 4.93 1.41 1.41\"/><path d=\"m17.66 17.66 1.41 1.41\"/><path d=\"M2 12h2\"/><path d=\"M20 12h2\"/><path d=\"m6.34 17.66-1.41 1.41\"/><path d=\"m19.07 4.93-1.41 1.41\"/>",
+      "moon": "<path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\"/>",
       "file-up": "<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M12 12v6\"/><path d=\"m15 15-3-3-3 3\"/>"
     };
     function icono(nombre, clase) {
@@ -5787,8 +5848,21 @@
       flushPendingVentas();
     }
 
+    // ── TEMA CLARO / OSCURO ──
+    function temaActual() { return document.documentElement.getAttribute('data-tema') === 'oscuro' ? 'oscuro' : 'claro'; }
+    function marcarTema() {
+      document.querySelectorAll('.tema-sel .rbtn').forEach(function (b) { b.classList.toggle('active', b.dataset.tema === temaActual()); });
+    }
+    function setTema(t) {
+      if (t === 'oscuro') document.documentElement.setAttribute('data-tema', 'oscuro');
+      else document.documentElement.removeAttribute('data-tema');
+      try { localStorage.setItem('rpos_tema', t); } catch (e) { }
+      marcarTema();
+    }
+
     // ── INICIALIZAR APP ──
     pintarIconos();
+    marcarTema();
     document.getElementById('login-logo').src = document.getElementById('logo-img').src;
     if (sesion) arrancarApp(); else mostrarLogin();
 
