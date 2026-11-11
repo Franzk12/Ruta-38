@@ -6,6 +6,8 @@
   <script>try { if (localStorage.getItem('rpos_tema') === 'oscuro') document.documentElement.setAttribute('data-tema', 'oscuro'); } catch (e) { }</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ruta 38 Repuestos</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#f97316">
   <link rel="icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIA">
   <link
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap"
@@ -5589,7 +5591,7 @@
       if (window.XLSX) return Promise.resolve(window.XLSX);
       return new Promise(function (ok, mal) {
         var sc = document.createElement('script');
-        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        sc.src = 'vendor/xlsx.full.min.js'; // SheetJS 0.18.5, incluido en el proyecto: funciona sin internet
         sc.onload = function () { ok(window.XLSX); };
         sc.onerror = function () { sc.remove(); mal(new Error('No se pudo cargar el lector de Excel (¿sin internet?)')); };
         document.head.appendChild(sc);
@@ -6027,6 +6029,15 @@
     marcarTema();
     document.getElementById('login-logo').src = document.getElementById('logo-img').src;
     if (sesion) arrancarApp(); else mostrarLogin();
+
+    // ── ABRIR SIN INTERNET ──
+    // El service worker (sw.js) guarda una copia de la app para que abra sin conexión. Solo
+    // existe cuando la app se sirve por http(s) (Vercel); abierta como archivo no hace falta.
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('Service worker no registrado:', e); });
+      });
+    }
 
   </script>
 </body>
