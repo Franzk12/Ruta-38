@@ -3738,9 +3738,23 @@
       el.style.color = r ? 'var(--danger)' : p ? 'var(--warn)' : 'var(--muted)';
       document.getElementById('pend-botones').style.display = p || r ? 'flex' : 'none';
     }
+    // Además de enviar la cola, vuelve a probar las rechazadas: si el rechazo se debía a algo
+    // ya corregido en la base, entran; si no, quedan apartadas otra vez. El uid evita duplicados.
     function reintentarPendientes() {
-      if (!navigator.onLine) { toast('Sin conexión — se enviarán solas al volver internet', 'aviso'); return; }
-      flushPendingVentas();
+      if (!navigator.onLine) { toast('Sin conexión — se enviarán solas al volver internet', 'aviso'); return Promise.resolve(); }
+      var rech = leerRechazadas();
+      if (rech.length) {
+        var pend = leerPendientes();
+        rech.forEach(function (r) {
+          if (pend.some(function (p) { return mismaVenta(p, r); })) return;
+          var v = JSON.parse(JSON.stringify(r));
+          delete v.rechazo; delete v.rechazadaEn;
+          pend.push(v);
+        });
+        // Solo se vacía la lista de rechazadas si quedaron anotadas en la cola
+        if (guardarPendientes(pend)) guardarLista(RECH_KEY, []);
+      }
+      return flushPendingVentas();
     }
     // Baja a un archivo las ventas que todavía no están en la base (pendientes y rechazadas),
     // para no depender solo de la memoria de este navegador.
@@ -3777,7 +3791,8 @@
           historialCompleto = false;
           // Las ventas que siguen en la cola offline todavía no están en la base — sin esto
           // desaparecerían del historial y del cierre de caja hasta que se sincronicen.
-          leerPendientes().forEach(function (p) {
+          // Lo mismo con las que la base rechazó: la plata está en la caja y tienen que contar.
+          leerPendientes().concat(leerRechazadas()).forEach(function (p) {
             if (historial.some(function (h) { return (p.dbId && h.dbId === p.dbId) || (p.uid && h.uid === p.uid); })) return;
             historial.unshift(p);
           });
@@ -5128,6 +5143,11 @@
       var pend = leerPendientes();
       pend.forEach(function (p) { if (mismaVenta(v, p)) p.anulada = true; });
       guardarPendientes(pend);
+      var rech = leerRechazadas();
+      if (rech.some(function (r) { return mismaVenta(v, r); })) {
+        rech.forEach(function (r) { if (mismaVenta(v, r)) r.anulada = true; });
+        guardarLista(RECH_KEY, rech);
+      }
       guardarCache('rpos_cache_hist', historial);
       guardarCache('rpos_cache_prod', productos);
       renderHistorial();

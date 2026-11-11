@@ -178,7 +178,7 @@ Cotizador: funciona como la Caja pero **no** descuenta stock ni registra ventas.
 ### 4.7 Administración
 
 - **Categorías** y **marcas**: alta y baja lógica.
-- **Ventas sin sincronizar**: cuántas ventas esperan para enviarse y cuántas rechazó la base, con botones **Reintentar ahora** y **Descargar copia** (ver [sección 6](#6-funcionamiento-sin-conexión)).
+- **Ventas sin sincronizar**: cuántas ventas esperan para enviarse y cuántas rechazó la base, con botones **Reintentar ahora** (envía la cola y vuelve a probar las rechazadas) y **Descargar copia** (ver [sección 6](#6-funcionamiento-sin-conexión)).
 - **Apariencia**: tema claro (por defecto) u oscuro. Se guarda en cada PC.
 - **Sesión**: con qué cuenta está conectada la PC y botón para cerrarla.
 
@@ -244,7 +244,7 @@ select id, codigo, nombre, stock from productos where stock < 0 and activos;
 - Cada venta tiene un `uid` único: reenviarla no la duplica.
 - El indicador de la barra superior muestra el estado: "Conectado", "Guardando…", "Sin conexión — en cola".
 
-**Ventas rechazadas.** Si la base rechaza una venta por datos inválidos, reintentar no sirve. La app la aparta en una lista propia (`rpos_rejected_ventas`) para que no trabe a las demás, y avisa. En **Admin → Ventas sin sincronizar** se ve cuántas hay y se puede **descargar una copia** (archivo `.json` con el detalle y el motivo) para cargarla a mano o enviarla a soporte.
+**Ventas rechazadas.** Si la base rechaza una venta por datos inválidos, reintentar no sirve. La app la aparta en una lista propia (`rpos_rejected_ventas`) para que no trabe a las demás, y avisa. Siguen apareciendo en el historial y en el cierre de caja con número provisorio, porque la plata está en la caja. En **Admin → Ventas sin sincronizar** se ve cuántas hay, **Reintentar ahora** las vuelve a enviar (sirve si el rechazo se debía a algo ya corregido en la base) y **Descargar copia** baja un archivo `.json` con el detalle y el motivo, para cargarlas a mano o enviarlo a soporte.
 
 > **Límites sin conexión.** No se pueden anular ventas ya guardadas, mover stock entre depósito y negocio, ni crear o editar productos. La app avisa y no aplica el cambio.
 >
@@ -290,7 +290,8 @@ Después: **Actions → Backup de la base → Run workflow** para hacer la prime
 
 Notas:
 
-- El backup programado solo corre desde la rama `main`.
+- El backup programado solo corre desde la rama `main`, y **falla todos los días hasta que existan los dos secretos**.
+- La copia queda como archivo descargable de la ejecución. Si el repositorio es público, cualquier persona con cuenta de GitHub puede bajarla: lo único que la protege es el cifrado, así que la contraseña tiene que ser larga (por ejemplo, seis palabras al azar).
 - GitHub pausa los workflows programados si el repositorio pasa 60 días sin actividad. Si llega un aviso por mail, entrar a Actions y reactivarlo.
 - Si la ejecución falla, GitHub avisa por mail al dueño del repositorio.
 - Si falla con "server version mismatch", subir `PG_VERSION` en el workflow a la versión de PostgreSQL del proyecto.
@@ -329,6 +330,18 @@ Cada cambio en la rama `main` se publica solo en Vercel. No hay entorno de prueb
 3. Mergear a `main`. Verificar en Vercel → Deployments que la publicación terminó.
 4. En cada PC, recargar la página. Con internet, la versión nueva aparece en la primera recarga.
 
+### Primera publicación de la versión 8
+
+El backup automático todavía no existe en `main`, así que el orden cambia. La app nueva funciona con la base de la versión 7 y la app de la versión 7 funciona con la base nueva, de modo que ningún paso deja la caja sin andar.
+
+1. Mergear a `main` y verificar la publicación en Vercel.
+2. Crear los dos secretos del backup (sección 8) y hacer **Run workflow**. Comprobar que termina en verde y descargar esa copia.
+3. Fuera del horario de atención, correr `supabase_migracion.sql` en el SQL Editor.
+4. Hacer una venta de prueba y anularla. Verificar en Supabase que `ventas.usuario_email` tiene el email y que `movimientos_stock` tiene las dos filas.
+5. Crear un usuario por persona, si todavía comparten cuenta.
+
+Si se prefiere tener el backup antes de mergear, correr `scripts/backup.sh` a mano desde una PC con `pg_dump` y `gpg`.
+
 ### Volver atrás
 
 - **La app:** Vercel → Deployments → elegir la publicación anterior → **Promote to Production** (o *Instant Rollback*). Después, revertir el cambio en `main` para que la próxima publicación no lo vuelva a traer.
@@ -358,7 +371,7 @@ Herramientas: consola del navegador (**F12 → Console**; los errores de la base
 | Después de actualizar sigue la versión vieja | Verificar en Vercel → Deployments que la publicación terminó y recargar. Si no hay internet, la app muestra la última copia guardada: es lo esperado. |
 | No cargan productos ni ventas | Revisar la consola. Si dice "permission denied" o "row-level security", falta correr `supabase_migracion.sql` o la sesión no es válida (cerrar sesión y volver a entrar). |
 | Ventas quedan "en cola" con internet | Revisar la consola: si la función `registrar_venta` no existe, falta la migración. Probar **Admin → Reintentar ahora**. |
-| Aviso "La base rechazó la venta" | La venta tenía un dato inválido. Está apartada, no perdida: **Admin → Descargar copia** y cargarla a mano o enviar el archivo a soporte. |
+| Aviso "La base rechazó la venta" | La venta tenía un dato inválido o la base tiene un problema. Está apartada, no perdida, y sigue contando en el cierre. **Admin → Descargar copia** y enviar el archivo a soporte; corregido el problema, **Reintentar ahora**. |
 | El ticket sale con número P-xxxx | La venta no llegó a la base en 6 segundos. Se guarda sola; el historial mostrará el número definitivo. |
 | "No alcanza el stock en depósito" | Otra PC ya movió esas unidades. Recargar para ver el stock actual. |
 | Faltan ventas viejas en el historial | Es lo esperado: se cargan desde el mes anterior. Usar "Cargar ventas anteriores". |

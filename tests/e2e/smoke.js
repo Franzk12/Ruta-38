@@ -153,6 +153,16 @@ async function hasta(fn, msg, ms = 8000) {
   const copia = JSON.parse(fs.readFileSync(await descarga.path(), 'utf8'));
   ok(copia.rechazadas.length === 1 && copia.rechazadas[0].uid === uid5 && /inválido/.test(copia.rechazadas[0].rechazo), 'la copia descargada incluye la venta rechazada y el motivo');
 
+  // 10) La venta rechazada sigue contando tras recargar, y "Reintentar ahora" la vuelve a probar
+  await page.reload();
+  ok(await hasta(() => page.evaluate(u => historial.some(v => v.uid === u), uid5), 'rechazada en historial'), 'venta rechazada: sigue en el historial y el cierre después de recargar');
+  base.rechazarUid = uid5;
+  await page.evaluate(() => reintentarPendientes());
+  ok((await rechazadas()).map(v => v.uid).join() === uid5 && (await cola()).length === 0, 'reintentar una venta que la base sigue rechazando la deja apartada (no se pierde)');
+  base.rechazarUid = null;
+  await page.evaluate(() => reintentarPendientes());
+  ok(base.ventas.some(v => v.uid === uid5) && (await rechazadas()).length === 0 && (await cola()).length === 0, 'corregido el problema, "Reintentar ahora" guarda la venta rechazada');
+
   ok(new Set(base.ventas.map(v => v.uid)).size === base.ventas.length, 'ninguna venta quedó duplicada en la base');
 
   await browser.close(); servidor.close();
